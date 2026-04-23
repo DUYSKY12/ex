@@ -1,13 +1,12 @@
-# ==============================================
-# Service B — Dockerfile
-# Replace this template with your actual setup
-# ==============================================
-#
-# See services/service-a/Dockerfile for examples
-# covering Node.js, Python, Java, Go, and .NET.
-#
-# Copy and adapt the appropriate template for
-# your chosen technology stack.
+FROM python:3.10-slim
 
-# TODO: Replace with your actual Dockerfile.
-FROM scratch
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+
+EXPOSE 5000
+
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "5000"]
