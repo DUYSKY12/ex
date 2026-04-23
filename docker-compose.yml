@@ -1,0 +1,253 @@
+# Docker Compose — Hotel Booking System
+# Run: docker compose up --build
+
+services:
+
+  # ─── Frontend ────────────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - gateway
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # ─── API Gateway ─────────────────────────────────────────────────────────────
+  gateway:
+    build: ./gateway
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      - auth-service
+      - room-service
+      - booking-service
+      - notification-service
+      - payment-service
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # ─── Auth Service ─────────────────────────────────────────────────────────────
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-5001}:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-admin}:${DB_PASSWORD:-changeme}@db-auth:5432/${AUTH_DB_NAME:-auth_db}
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret}
+    depends_on:
+      db-auth:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Room Service ────────────────────────────────────────────────────────────
+  room-service:
+    build: ./services/room-service
+    ports:
+      - "${ROOM_SERVICE_PORT:-5002}:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-admin}:${DB_PASSWORD:-changeme}@db-room:5432/${ROOM_DB_NAME:-room_db}
+    depends_on:
+      db-room:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Booking Service ─────────────────────────────────────────────────────────
+  booking-service:
+    build: ./services/booking-service
+    ports:
+      - "${BOOKING_SERVICE_PORT:-5003}:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-admin}:${DB_PASSWORD:-changeme}@db-booking:5432/${BOOKING_DB_NAME:-booking_db}
+      - ROOM_SERVICE_URL=http://room-service:5000
+      - PAYMENT_SERVICE_URL=http://payment-service:5000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5000
+    depends_on:
+      db-booking:
+        condition: service_healthy
+      room-service:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Notification Service ─────────────────────────────────────────────────────
+  notification-service:
+    build: ./services/booking-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-5004}:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-admin}:${DB_PASSWORD:-changeme}@db-notification:5432/${NOTIFICATION_DB_NAME:-notification_db}
+      - MAILHOG_HOST=mailhog
+      - MAILHOG_PORT=1025
+    depends_on:
+      db-notification:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Payment Service ──────────────────────────────────────────────────────────
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-5005}:5000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-admin}:${DB_PASSWORD:-changeme}@db-payment:5432/${PAYMENT_DB_NAME:-payment_db}
+      - BOOKING_SERVICE_URL=http://booking-service:5000
+    depends_on:
+      db-payment:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Mailhog (Mock SMTP) ──────────────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"   # SMTP port (dùng nội bộ)
+      - "8025:8025"   # Web UI — xem email tại http://localhost:8025
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # ─── Databases (one per service) ──────────────────────────────────────────────
+  db-auth:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-auth-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${AUTH_DB_NAME:-auth_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-room:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${ROOM_DB_NAME:-room_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-room-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${ROOM_DB_NAME:-room_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-booking:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${BOOKING_DB_NAME:-booking_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-booking-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${BOOKING_DB_NAME:-booking_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-notification:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:-notification_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-notification-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${NOTIFICATION_DB_NAME:-notification_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-payment:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PAYMENT_DB_NAME:-payment_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-payment-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${PAYMENT_DB_NAME:-payment_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db-auth-data:
+  db-room-data:
+  db-booking-data:
+  db-notification-data:
+  db-payment-data:
