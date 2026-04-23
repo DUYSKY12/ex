@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models import Booking
 from src.schemas import BookingCreate, BookingResponse, BookingListResponse, ConfirmBookingRequest
-from src.external_services import get_room, update_room_status
+from src.external_services import get_room, update_room_status, send_notification
 from typing import Optional
 from datetime import datetime
 
@@ -13,6 +13,9 @@ def get_current_user_id(x_user_id: Optional[str] = Header(None)):
     if not x_user_id:
         raise HTTPException(status_code=401, detail={"error": "Unauthorized", "message": "Missing X-User-Id header"})
     return x_user_id
+
+def get_current_user_role(x_user_role: Optional[str] = Header("guest")):
+    return x_user_role
 
 @router.post("", response_model=BookingResponse, status_code=201)
 def create_booking(booking: BookingCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
@@ -94,6 +97,37 @@ def get_my_bookings(
     
     return {"data": bookings, "total": total, "page": page, "limit": limit}
 
+@router.get("/all", response_model=BookingListResponse)
+def get_all_bookings_admin(
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    role: str = Depends(get_current_user_role)
+):
+    if role != "admin":
+        raise HTTPException(status_code=403, detail={"error": "Forbidden", "message": "Admin privileges required"})
+        
+    query = db.query(Booking)
+    if status:
+        query = query.filter(Booking.status == status)
+    
+    total = query.count()
+    bookings = query.offset((page - 1) * limit).limit(limit).all()
+    
+    return {"data": bookings, "total": total, "page": page, "limit": limit}
+
+@router.get("/{id}", response_model=BookingResponse)
+def get_booking_details(id: str, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id), role: str = Depends(get_current_user_role)):
+    booking = db.query(Booking).filter(Booking.id == id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail={"error": "NotFound", "message": "Booking not found"})
+        
+    if role != "admin" and str(booking.user_id) != user_id:
+        raise HTTPException(status_code=403, detail={"error": "Forbidden", "message": "You do not have permission to view this booking"})
+        
+    return booking
+
 @router.patch("/{id}/confirm", response_model=BookingResponse)
 def confirm_booking(id: str, req: ConfirmBookingRequest, db: Session = Depends(get_db)):
     # Endpoint này dành cho Payment Service gọi sang sau khi thanh toán thành công
@@ -108,6 +142,14 @@ def confirm_booking(id: str, req: ConfirmBookingRequest, db: Session = Depends(g
     booking.payment_id = req.payment_id
     db.commit()
     db.refresh(booking)
+    
+    # Kích hoạt sự kiện gửi Email bất đồng bộ (Async Event)
+    try:
+        send_notification(str(booking.id), str(booking.user_id))
+    except Exception as e:
+        # Lỗi gửi email không làm ảnh hưởng đến luồng đặt phòng
+        print(f"[Warning] Failed to send notification for booking {id}: {e}")
+        
     return booking
 
 @router.patch("/{id}/cancel", response_model=BookingResponse)
