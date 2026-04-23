@@ -1,4 +1,4 @@
-# 📊 Microservices System — Analysis and Design
+# 📊 Microservices System — In-Depth Analysis and Design
 
 **Project:** Hệ thống đặt phòng khách sạn trực tuyến
 **Team:** 
@@ -9,41 +9,63 @@
 **References:**
 1. *Service-Oriented Architecture: Analysis and Design for Services and Microservices* — Thomas Erl (2nd Edition)
 2. *Microservices Patterns: With Examples in Java* — Chris Richardson
-3. *Bài tập — Phát triển phần mềm hướng dịch vụ* — Hung DN (2024)
 
 ---
 
 ## 1. 🎯 Requirements Analysis & Problem Statement
 *(Phụ trách: Lê Bùi Anh Duy)*
 
-- **Domain**: Hospitality / Đặt phòng khách sạn
-- **Problem**: Khách hàng gặp khó khăn khi tìm kiếm và đặt phòng khách sạn thủ công qua điện thoại hoặc đến trực tiếp. Quản lý khách sạn cũng thiếu công cụ để theo dõi tình trạng phòng và lịch đặt phòng theo thời gian thực. Ngoài ra, hệ thống cần bảo mật (xác thực người dùng) và hỗ trợ thanh toán trực tuyến để vận hành thực tế.
-- **Users/Actors**:
-  - **Khách hàng (Guest)**: Đăng ký, đăng nhập, tìm kiếm phòng, đặt phòng, thanh toán, hủy đặt phòng, xem lịch sử
-  - **Quản trị viên (Admin)**: Quản lý phòng, xem và cập nhật trạng thái đặt phòng, xem báo cáo
-- **Scope**:
-  - **In scope**: Xác thực người dùng, quản lý phòng, đặt/hủy phòng, thanh toán, thông báo email, lịch sử giao dịch
-  - **Out of scope**: Đánh giá khách sạn, quản lý nhân viên, tích hợp cổng thanh toán thực (dùng mock), đa ngôn ngữ
+### 1.1 Vấn đề nghiệp vụ (Problem Statement)
+Quy trình đặt phòng khách sạn truyền thống gặp nhiều hạn chế: Khách hàng mất thời gian gọi điện kiểm tra phòng trống; Khách sạn khó khăn trong việc tránh "overbooking" (đặt trùng phòng); Không có hệ thống tự động xử lý thanh toán và hoàn tiền khi hủy phòng.
 
-### 1.1 Use Case Diagram
+**Giải pháp:** Xây dựng hệ thống phân tán (Microservices) tự động hóa toàn bộ quy trình: Quản lý danh mục phòng, tìm kiếm theo thời gian thực, đặt phòng an toàn với Saga Pattern và thanh toán trực tuyến.
+
+### 1.2 Yêu cầu chức năng chi tiết (Detailed Functional Requirements)
+
+**A. Khách hàng (Guest):**
+- **Quản lý tài khoản:** Đăng ký, đăng nhập, cập nhật hồ sơ, đổi mật khẩu.
+- **Tìm kiếm & Trải nghiệm:**
+  - Tìm phòng theo ngày Check-in / Check-out, số người.
+  - Lọc phòng theo mức giá, loại phòng (Single/Double/Suite).
+  - Xem chi tiết phòng (Mô tả, hình ảnh, tiện nghi).
+- **Giao dịch (Đặt phòng & Thanh toán):**
+  - Thực hiện đặt phòng, hệ thống tự động khóa (lock) phòng tạm thời.
+  - Thanh toán trực tuyến (Mô phỏng cổng thanh toán).
+  - Nhận email xác nhận (Invoice).
+  - Hủy đặt phòng và nhận hoàn tiền (Refund) nếu đúng chính sách.
+  - Xem lịch sử đặt phòng và trạng thái thanh toán.
+
+**B. Quản trị viên (Admin):**
+- **Quản lý tài nguyên khách sạn:** Thêm, sửa, xóa thông tin phòng, hình ảnh, cập nhật giá linh hoạt.
+- **Quản lý đặt phòng:** Xem toàn bộ giao dịch, trạng thái đặt phòng (Pending, Confirmed, Cancelled). Thay đổi trạng thái thủ công khi có sự cố.
+- **Thống kê:** Xem báo cáo doanh thu theo tháng, tỷ lệ lấp đầy phòng.
+
+### 1.3 Yêu cầu phi chức năng (Non-Functional Requirements)
+- **Security:** Mã hóa mật khẩu bằng BCrypt. Mọi request (trừ public API) đều phải mang chuỗi JWT hợp lệ. API Gateway chịu trách nhiệm xác thực tập trung.
+- **Resilience (Khả năng chịu lỗi):** Sự cố ở Notification Service (VD: server mail chết) không được làm gián đoạn luồng đặt phòng.
+- **Performance:** API tìm kiếm phòng trống phải phản hồi dưới 300ms.
+- **Scalability:** Hệ thống có thể nhân bản (scale) riêng biệt Booking Service và Room Service khi mùa cao điểm du lịch tới.
+
+### 1.4 Use Case Diagram
 ```mermaid
 flowchart LR
     %% Actors
-    Guest(["Khách hàng (Guest)"])
-    Admin(["Quản trị viên (Admin)"])
+    Guest(["👤 Khách hàng"])
+    Admin(["👨‍💼 Quản trị viên"])
 
     %% System Boundary
-    subgraph Hotel Booking System
-        UC1("Đăng ký / Đăng nhập")
-        UC2("Tìm kiếm phòng")
+    subgraph Hệ thống Đặt Phòng Microservices
+        UC1("Quản lý tài khoản (Đăng ký/Đăng nhập)")
+        UC2("Tìm kiếm & Lọc phòng trống")
         UC3("Xem chi tiết phòng")
-        UC4("Đặt phòng & Thanh toán")
-        UC5("Xem lịch sử đặt phòng")
-        UC6("Hủy đặt phòng")
+        UC4("Tạo đơn đặt phòng (Booking)")
+        UC5("Thanh toán điện tử")
+        UC6("Hủy đặt phòng & Hoàn tiền")
+        UC7("Nhận Email thông báo")
         
-        UC7("Quản lý phòng (Thêm/Sửa/Xóa)")
-        UC8("Xem toàn bộ đặt phòng")
-        UC9("Báo cáo doanh thu/thống kê")
+        UC8("Quản lý danh mục Phòng")
+        UC9("Quản lý tổng thể Booking")
+        UC10("Xem báo cáo doanh thu")
     end
 
     %% Guest relationships
@@ -53,234 +75,287 @@ flowchart LR
     Guest --> UC4
     Guest --> UC5
     Guest --> UC6
+    Guest --> UC7
 
     %% Admin relationships
     Admin --> UC1
-    Admin --> UC7
     Admin --> UC8
     Admin --> UC9
+    Admin --> UC10
 ```
 
 ---
 
-## 2. 🧩 Service-Oriented Analysis
+## 2. 🧩 Service-Oriented Analysis (Theo Thomas Erl)
 *(Phụ trách: Lê Bùi Anh Duy & Phạm Thành Đạt)*
 
-### 2.1 Business Process Decomposition
-| Step | Activity                | Actor      | Description                                                         |
-|------|-------------------------|------------|---------------------------------------------------------------------|
-| 1    | Đăng ký tài khoản       | Khách hàng | Tạo tài khoản mới với email, mật khẩu, thông tin cá nhân           |
-| 2    | Đăng nhập               | Khách/Admin| Xác thực thông tin, nhận JWT token                                  |
-| 3    | Xem danh sách phòng     | Khách hàng | Xem các phòng còn trống, lọc theo loại/ngày/giá                    |
-| 4    | Xem chi tiết phòng      | Khách hàng | Xem mô tả, tiện nghi, giá, ảnh phòng                               |
-| 5    | Tạo đặt phòng           | Khách hàng | Chọn phòng, nhập ngày check-in/check-out, tạo booking              |
-| 6    | Nhận email xác nhận     | Hệ thống   | Gửi email xác nhận booking tới khách hàng                          |
-| 7    | Thanh toán              | Khách hàng | Thanh toán booking, hệ thống xác nhận giao dịch                    |
-| 8    | Xác nhận đặt phòng      | Hệ thống   | Sau thanh toán thành công, cập nhật trạng thái booking & phòng     |
-| 9    | Xem lịch sử đặt phòng   | Khách hàng | Xem danh sách booking và trạng thái, lịch sử thanh toán            |
-| 10   | Hủy đặt phòng           | Khách hàng | Hủy booking, hoàn tiền nếu đủ điều kiện, cập nhật phòng trống     |
-| 11   | Nhận email hủy phòng    | Hệ thống   | Gửi email xác nhận hủy và hoàn tiền tới khách hàng                 |
-| 12   | Quản lý phòng           | Admin      | Thêm, sửa, xóa phòng; cập nhật trạng thái phòng                   |
-| 13   | Xem tất cả đặt phòng    | Admin      | Xem toàn bộ booking, lọc theo trạng thái/ngày/khách hàng          |
+Để xác định ranh giới các dịch vụ, chúng ta áp dụng phân rã quy trình nghiệp vụ (Business Process Decomposition) từ góc nhìn Service-Oriented Architecture (SOA).
 
-### 2.2 Entity Identification
-| Entity       | Attributes                                                                          | Owned By              |
-|--------------|-------------------------------------------------------------------------------------|-----------------------|
-| User         | id, name, email, password_hash, role, phone, created_at                            | Auth Service          |
-| Room         | id, room_number, type, price_per_night, description, status, capacity, images      | Room Service          |
-| Booking      | id, user_id, room_id, check_in, check_out, status, total_price, payment_id, created_at | Booking Service   |
-| Payment      | id, booking_id, user_id, amount, method, status, transaction_id, created_at        | Payment Service       |
-| Notification | id, user_id, booking_id, type, email, status, sent_at                              | Notification Service  |
+### 2.1 Phân rã quy trình nghiệp vụ (Business Process Decomposition)
 
-### 2.3 Service Candidate Identification
-Hệ thống được phân tách theo **business capability** và **bounded context**:
-- **Auth Service**: Xác thực và phân quyền người dùng. *Entity Service* — sở hữu dữ liệu User, phát JWT token.
-- **Room Service**: Quản lý toàn bộ thông tin phòng. *Entity Service* — sở hữu dữ liệu Room.
-- **Booking Service**: Điều phối quy trình đặt phòng. *Task Service* — gọi Room Service (kiểm tra & cập nhật phòng), Notification Service (gửi email).
-- **Payment Service**: Xử lý thanh toán. *Task Service* — gọi Booking Service (xác nhận booking sau thanh toán).
-- **Notification Service**: Gửi email thông báo. *Utility Service* — nhận yêu cầu từ Booking Service, gửi email qua Mailhog.
+Hệ thống được chia thành 4 quy trình nghiệp vụ cốt lõi:
+
+**Quy trình 1: Quản lý danh tính (Identity Process)**
+1. User nhập thông tin đăng ký -> Hệ thống băm mật khẩu, lưu DB.
+2. User đăng nhập -> Hệ thống cấp phát JWT token có thời hạn.
+
+**Quy trình 2: Quản lý danh mục và tìm kiếm (Catalog & Search Process)**
+1. Admin tạo cấu hình phòng (giá, số lượng, hình ảnh).
+2. Guest nhập tiêu chí tìm kiếm -> Hệ thống quét dữ liệu và loại trừ các phòng đã được đặt trong khoảng thời gian đó.
+
+**Quy trình 3: Vòng đời đặt phòng (Reservation Lifecycle Process)**
+1. Guest chọn phòng, chọn ngày -> Hệ thống tạo Booking ở trạng thái `PENDING`.
+2. Hệ thống kiểm tra và khóa (reserve) quỹ phòng tạm thời.
+3. Guest thanh toán -> Hệ thống cập nhật Booking sang `CONFIRMED`.
+4. Gửi Email Invoice cho Guest.
+
+**Quy trình 4: Quy trình Hủy & Hoàn tiền (Cancellation & Refund Process)**
+1. Guest yêu cầu hủy -> Hệ thống kiểm tra chính sách thời gian.
+2. Hệ thống cập nhật Booking sang `CANCELLED`.
+3. Hệ thống mở khóa (release) quỹ phòng.
+4. Yêu cầu Payment Gateway hoàn tiền lại thẻ của Guest.
+5. Gửi Email xác nhận hủy.
+
+### 2.2 Nhận diện thực thể (Entity Identification & Modeling)
+
+Dựa trên các quy trình trên, chúng ta rút trích ra các Thực thể (Entities) cốt lõi:
+
+| Thực thể (Entity) | Thuộc tính chính (Key Attributes) | Liên kết (Relationships) | Phân loại SOA |
+|-------------------|-----------------------------------|--------------------------|---------------|
+| **User** | id, email, password_hash, role, profile | 1 User -> N Bookings | Entity Model |
+| **Room** | id, room_number, type, base_price, amenities, status | 1 Room -> N Bookings | Entity Model |
+| **Booking** | id, check_in, check_out, total_amount, status | Thuộc về 1 User, 1 Room | Task / Process Model |
+| **Payment** | id, amount, method, status, transaction_ref | Gắn với 1 Booking | Task Model |
+| **Notification** | id, email_to, template, status, sent_at | Kích hoạt bởi Booking | Utility Model |
+
+### 2.3 Phân định Dịch vụ (Service Candidate Identification)
+
+Dựa trên nguyên tắc *Service Autonomy* (Tự trị) và *Service Reusability* (Tái sử dụng) của SOA:
+
+1. **Auth Service (Entity Service)**: Đóng gói toàn bộ logic về User và BCrypt/JWT. Tái sử dụng cho mọi yêu cầu xác thực.
+2. **Room Service (Entity Service)**: Đóng gói dữ liệu phòng. Chịu trách nhiệm bảo vệ tính nhất quán của trạng thái phòng.
+3. **Booking Service (Task Service)**: Đóng vai trò là "Orchestrator" (người điều phối) ghép nối Room Service, Payment Service và Notification Service lại để hoàn thành 1 nghiệp vụ kinh doanh.
+4. **Payment Service (Task Service)**: Chuyên biệt hóa việc tương tác với cổng thanh toán ngoài.
+5. **Notification Service (Utility Service)**: Dịch vụ tiện ích dùng chung, chỉ nhận tín hiệu và đẩy email (SMTP).
 
 ---
 
-## 3. 🔄 System Architecture & Service-Oriented Design
+## 3. 🔄 System Architecture & Microservices Patterns (Theo Chris Richardson)
 *(Phụ trách: Phạm Thành Đạt & Mạc Triệu Sơn)*
 
-### 3.1 Microservices Decomposition
-*(Phụ trách: Phạm Thành Đạt)*
+### 3.1 Microservices Decomposition & API Gateway Pattern
+
 ```mermaid
 graph TD
-    Client[Client Apps / Web Frontend] --> API_GW[API Gateway<br>:8080]
-    API_GW --> US[Auth Service<br>:5001]
-    API_GW --> RS[Room Service<br>:5002]
-    API_GW --> BS[Booking Service<br>:5003]
-    API_GW --> PS[Payment Service<br>:5005]
+    Client[Client (Web/Mobile App)] -->|REST over HTTPS| API_GW[API Gateway<br>:8080]
     
-    BS --> RS
-    BS --> PS
-    BS -.->|Async Event| NS[Notification Service<br>:5004]
-    
-    US --> DBU[(DB Auth)]
-    RS --> DBR[(DB Room)]
-    BS --> DBB[(DB Booking)]
-    PS --> DBP[(DB Payment)]
+    subgraph Private Docker Network
+        API_GW -->|Route /api/auth| US[Auth Service<br>:5001]
+        API_GW -->|Route /api/rooms| RS[Room Service<br>:5002]
+        API_GW -->|Route /api/bookings| BS[Booking Service<br>:5003]
+        API_GW -->|Route /api/payments| PS[Payment Service<br>:5005]
+        
+        BS -->|REST RPC| RS
+        BS -->|REST RPC| PS
+        BS -.->|Async Message| NS[Notification Service<br>:5004]
+        
+        US --> DBU[(PostgreSQL<br>Auth)]
+        RS --> DBR[(PostgreSQL<br>Room)]
+        BS --> DBB[(PostgreSQL<br>Booking)]
+        PS --> DBP[(PostgreSQL<br>Payment)]
+        NS --> MH[Mailhog SMTP<br>:8025]
+    end
 ```
 
-### 3.2 Service Inventory
-| Service               | Responsibility                                              | Type    | Port  | Người phụ trách   |
-|-----------------------|-------------------------------------------------------------|---------|-------|-------------------|
-| Auth Service          | Đăng ký, đăng nhập, xác thực JWT, quản lý user             | Entity  | 5001  | Phạm Thành Đạt    |
-| Room Service          | Quản lý thông tin phòng khách sạn (CRUD)                    | Entity  | 5002  | Phạm Thành Đạt    |
-| Booking Service       | Quản lý đặt phòng, hủy phòng, lịch sử booking              | Task    | 5003  | Lê Bùi Anh Duy    |
-| Notification Service  | Gửi email xác nhận đặt phòng / hủy phòng                   | Utility | 5004  | Lê Bùi Anh Duy    |
-| Payment Service       | Xử lý thanh toán, hoàn tiền, lịch sử giao dịch             | Task    | 5005  | Mạc Triệu Sơn     |
-| Gateway               | API routing, xác thực JWT, rate limiting                    | Utility | 8080  | Mạc Triệu Sơn     |
-| Frontend              | Giao diện người dùng cho khách và admin                     | UI      | 3000  | Mạc Triệu Sơn     |
+### 3.2 Các Mẫu thiết kế (Design Patterns) áp dụng
 
-### 3.3 Design Patterns
-*(Phụ trách: Mạc Triệu Sơn)*
-- **Database per Service**: Mỗi service có một CSDL PostgreSQL riêng biệt, không truy cập chéo.
-- **API Gateway**: Tập trung định tuyến và xác thực (Gateway verify JWT, forward `X-User-Id`).
-- **Saga Pattern**: Áp dụng cho Booking Flow. Booking Service đóng vai trò điều phối gọi Room Service và Payment Service.
+1. **API Gateway Pattern**: 
+   - Đóng vai trò mặt tiền (Facade) cho hệ thống.
+   - **Authentication Translation**: Gateway là nơi duy nhất phân tích JWT Token. Nếu hợp lệ, nó sẽ chèn thêm header `X-User-Id` và `X-User-Role` rồi đẩy (forward) request xuống các Service bên dưới. Các Service bên dưới hoàn toàn tin tưởng header này.
+2. **Database-per-Service Pattern**:
+   - Đảm bảo tính lỏng lẻo (Loose Coupling). Nếu DB của Room Service chết, Auth Service vẫn hoạt động bình thường. Ngăn chặn việc join (kết nối) bảng trực tiếp giữa các service.
+3. **Saga Pattern (Orchestration Approach)**:
+   - Thay vì dùng ACID Transaction (2PC) rất chậm trong hệ thống phân tán, hệ thống dùng Saga. Booking Service điều phối toàn bộ các bước Đặt phòng -> Khóa phòng -> Thanh toán. Nếu bất kỳ bước nào lỗi, nó sẽ phát lệnh gọi các giao dịch bồi hoàn (Compensating Transactions) để đảo ngược trạng thái.
+4. **Circuit Breaker Pattern (Dự kiến)**:
+   - Nếu Payment Service phải gọi API của ngân hàng thật và ngân hàng bị chậm (timeout), Circuit Breaker sẽ "ngắt mạch" trả về lỗi ngay lập tức để không làm sập (exhaust) tài nguyên của hệ thống nội bộ.
+5. **Async Messaging Pattern**:
+   - Giao tiếp giữa Booking và Notification là bất đồng bộ (Asynchronous). Booking không cần chờ Email gửi xong mới trả kết quả cho khách hàng.
 
-### 3.4 Service Interactions (Sequence Diagram)
+---
+
+## 4. 📋 Detailed API Specifications (Uniform Contract)
 *(Phụ trách: Mạc Triệu Sơn)*
+
+Thiết kế giao tiếp giữa Client và Gateway tuân thủ chuẩn RESTful API.
+
+### 4.1 Auth Service (`/api/auth`)
+| Method | Endpoint | Authorization | Body Payload | Description |
+|---|---|---|---|---|
+| POST | `/login` | Public | `{email, password}` | Trả về chuỗi JWT Token. |
+| POST | `/register`| Public | `{email, password, name, phone}` | Đăng ký tài khoản Guest mới. |
+| GET | `/verify` | JWT (Gateway gọi) | N/A | Xác minh Token hợp lệ hay không. |
+
+### 4.2 Room Service (`/api/rooms`)
+| Method | Endpoint | Authorization | Body Payload | Description |
+|---|---|---|---|---|
+| GET | `/` | Public | `?type=single&min_price=100` | Liệt kê toàn bộ phòng (có lọc). |
+| GET | `/available` | Public | `?check_in=...&check_out=...` | Tìm các phòng còn trống trong khung giờ. |
+| POST | `/` | Admin | `{room_number, type, price...}` | Tạo phòng mới. |
+| PATCH | `/{id}/status` | Internal (Booking gọi) | `{status: "booked"}` | Đánh dấu phòng đã được giữ. |
+
+### 4.3 Booking Service (`/api/bookings`)
+| Method | Endpoint | Authorization | Body Payload | Description |
+|---|---|---|---|---|
+| POST | `/` | Guest | `{room_id, check_in, check_out}` | Khởi tạo đơn đặt phòng (PENDING). |
+| GET | `/{id}` | Guest / Admin | N/A | Lấy chi tiết đơn đặt phòng. |
+| PATCH | `/{id}/confirm`| Internal (Payment gọi)| N/A | Xác nhận đặt phòng sau khi trả tiền. |
+| POST | `/{id}/cancel` | Guest | N/A | Yêu cầu hủy đặt phòng và hoàn tiền. |
+
+### 4.4 Payment Service (`/api/payments`)
+| Method | Endpoint | Authorization | Body Payload | Description |
+|---|---|---|---|---|
+| POST | `/` | Guest | `{booking_id, amount, method}` | Thanh toán đơn hàng. |
+| POST | `/{id}/refund` | Internal (Booking gọi) | N/A | Yêu cầu hoàn lại tiền vào tài khoản. |
+
+---
+
+## 5. ⚙️ System Interactions & Workflows
+*(Phụ trách: Mạc Triệu Sơn)*
+
+### 5.1 Workflow 1: Đặt phòng và Thanh toán (Saga Orchestration)
+
+Khi khách hàng bấm "Book & Pay", đây là một giao dịch phân tán đòi hỏi tính nhất quán.
+
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant GW as Gateway
-    participant AU as Auth Service
-    participant RM as Room Service
-    participant BK as Booking Service
-    participant PY as Payment Service
-    participant NT as Notification Service
+    participant C as Client
+    participant GW as API Gateway
+    participant BS as Booking Service (Orchestrator)
+    participant RS as Room Service
+    participant PS as Payment Service
+    participant NS as Notification Service
 
-    Note over U,PY: Luồng đặt phòng (Saga Flow)
-    U->>GW: POST /api/bookings
-    GW->>AU: POST /auth/verify
-    AU-->>GW: {valid: true, user}
-    GW->>BK: POST /bookings (X-User-Id, X-User-Role)
+    C->>GW: POST /api/bookings
+    GW->>BS: (Tạo Booking Status: PENDING)
     
-    BK->>RM: GET /rooms/available
-    RM-->>BK: Room info
-    BK->>RM: PATCH /rooms/{id}/status {status: "booked"}
-    
-    BK-->>GW: Booking (status: pending)
-    GW-->>U: Booking created
-    
-    Note over U,PY: Luồng thanh toán
-    U->>GW: POST /api/payments
-    GW->>AU: verify token
-    GW->>PY: POST /payments
-    PY->>BK: PATCH /bookings/{id}/confirm
-    BK-->>PY: Booking confirmed
-    PY-->>GW: Payment success
-    GW-->>U: Payment confirmed
-    
-    BK--)NT: POST /notifications/booking-confirmed (async)
+    %% Bước 1: Khóa phòng
+    BS->>RS: PATCH /rooms/{id}/status (BOOKED)
+    alt Phòng đã bị người khác đặt (Conflict)
+        RS-->>BS: 400 Bad Request
+        BS-->>GW: Trả lỗi cho khách hàng (Failed)
+    else Phòng hợp lệ
+        RS-->>BS: 200 OK (Đã khóa phòng)
+        
+        %% Bước 2: Thanh toán
+        BS->>PS: POST /api/payments (Gọi tự động hoặc Client gọi)
+        alt Thanh toán thất bại / Timeout
+            PS-->>BS: 402 Payment Required
+            Note over BS,RS: Compensating Transaction
+            BS->>RS: PATCH /rooms/{id}/status (AVAILABLE) - Mở lại phòng
+            BS-->>GW: Trả lỗi thanh toán (Booking Failed)
+        else Thanh toán thành công
+            PS-->>BS: 200 OK
+            BS->>BS: Cập nhật Booking Status -> CONFIRMED
+            BS--)NS: Gửi Async Event (Booking ID) để gửi Email
+            BS-->>GW: Đặt phòng thành công!
+            GW-->>C: Hiển thị giao diện Success
+        end
+    end
 ```
 
-### 3.5 Data Ownership & Boundaries
-| Data Entity  | Owner Service        | Access Pattern                                                              |
-|--------------|----------------------|-----------------------------------------------------------------------------|
-| User         | Auth Service         | CRUD qua REST API; Gateway verify token trước mỗi request                  |
-| Room         | Room Service         | CRUD đầy đủ; Booking Service gọi để kiểm tra & cập nhật trạng thái         |
-| Booking      | Booking Service      | CRUD qua REST API; lưu `payment_id` để gọi refund; Payment gọi để confirm  |
-| Payment      | Payment Service      | CRUD qua REST API; độc lập, liên kết với Booking qua `booking_id`          |
-| Notification | Notification Service | Write-only từ Booking Service; Admin đọc lịch sử qua REST API              |
+### 5.2 Workflow 2: Quy trình Hủy phòng (Cancellation Flow)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant GW as API Gateway
+    participant BS as Booking Service
+    participant RS as Room Service
+    participant PS as Payment Service
+
+    C->>GW: POST /api/bookings/{id}/cancel
+    GW->>BS: Forward Request
+    BS->>BS: Kiểm tra điều kiện hủy (Trước 24h?)
+    
+    BS->>RS: PATCH /rooms/{id}/status (AVAILABLE) - Trả phòng
+    BS->>PS: POST /payments/{payment_id}/refund - Hoàn tiền
+    PS-->>BS: Refund Processed
+    
+    BS->>BS: Cập nhật Booking -> CANCELLED
+    BS-->>GW: Hủy thành công
+    GW-->>C: Cập nhật UI
+```
 
 ---
 
-## 4. 📋 API Specifications
-*(Phụ trách: Mạc Triệu Sơn)*
-
-Định nghĩa API đầy đủ tại:
-- [`docs/api-specs/auth-service.yaml`](api-specs/auth-service.yaml) — Auth Service
-- [`docs/api-specs/room-service.yaml`](api-specs/room-service.yaml) — Room Service
-- [`docs/api-specs/booking-service.yaml`](api-specs/booking-service.yaml) — Booking Service
-- [`docs/api-specs/notification-service.yaml`](api-specs/notification-service.yaml) — Notification Service
-- [`docs/api-specs/payment-service.yaml`](api-specs/payment-service.yaml) — Payment Service
-
----
-
-## 5. 🗄️ Database Design & Data Model
+## 6. 🗄️ Database Design & Entity Relationship Diagram (ERD)
 *(Phụ trách: Phạm Thành Đạt)*
 
-### 5.1 Entity Relationship Diagram (ERD)
+Mặc dù các CSDL bị phân tách vật lý (Database-per-service), về mặt logic, mô hình dữ liệu tổng thể trông như sau:
+
 ```mermaid
 erDiagram
-    USERS ||--o{ BOOKINGS : makes
-    ROOMS ||--o{ BOOKINGS : booked_in
-    BOOKINGS ||--o{ PAYMENTS : paid_via
-    BOOKINGS ||--o{ NOTIFICATIONS : triggers
+    USERS ||--o{ BOOKINGS : "makes (1:N)"
+    ROOMS ||--o{ BOOKINGS : "reserved in (1:N)"
+    BOOKINGS ||--|| PAYMENTS : "paid via (1:1)"
+    BOOKINGS ||--o{ NOTIFICATIONS : "triggers (1:N)"
     
     USERS {
         UUID id PK
-        string email
+        string full_name
+        string email UK
         string password_hash
-        string role
+        string phone
+        string role "GUEST/ADMIN"
+        timestamp created_at
     }
     
     ROOMS {
         UUID id PK
-        string room_number
-        string type
-        float price_per_night
-        string status
+        string room_number UK
+        string type "SINGLE/DOUBLE/SUITE"
+        decimal price_per_night
+        string status "AVAILABLE/BOOKED/MAINTENANCE"
+        text amenities
+        timestamp created_at
     }
     
     BOOKINGS {
         UUID id PK
-        UUID user_id FK
-        UUID room_id FK
-        date check_in
-        date check_out
-        float total_price
+        UUID user_id FK "Stored logically"
+        UUID room_id FK "Stored logically"
+        date check_in_date
+        date check_out_date
+        decimal total_price
         UUID payment_id
-        string status
+        string status "PENDING/CONFIRMED/CANCELLED"
+        timestamp created_at
     }
     
     PAYMENTS {
         UUID id PK
-        UUID booking_id FK
-        UUID user_id FK
-        float amount
-        string status
+        UUID booking_id FK "Stored logically"
+        UUID user_id FK "Stored logically"
+        decimal amount
+        string method "CREDIT_CARD/PAYPAL"
+        string transaction_ref
+        string status "SUCCESS/FAILED/REFUNDED"
+        timestamp created_at
     }
 ```
 
 ---
 
-## 6. ❗ Non-Functional Requirements & Deployment
+## 7. 🚀 Deployment Architecture & Operations
 *(Phụ trách: Phạm Thành Đạt & Lê Bùi Anh Duy)*
 
-| Requirement    | Description                                                                |
-|----------------|----------------------------------------------------------------------------|
-| Security       | JWT xác thực tại Gateway; forward `X-User-Id`, `X-User-Role` cho services |
-| Performance    | Thời gian phản hồi < 500ms cho các thao tác thông thường                  |
-| Scalability    | Mỗi service có thể scale độc lập bằng Docker                              |
-| Availability   | Health check endpoint `GET /health` trên mọi service                      |
-| Portability    | Chạy hoàn toàn trong Docker containers, không phụ thuộc host              |
-| Data Isolation | Mỗi service có database PostgreSQL riêng, không truy cập chéo database    |
-| Observability  | Gateway log toàn bộ request/response; mỗi service log lỗi nội bộ         |
+### 7.1 Môi trường triển khai (Deployment)
+- Toàn bộ kiến trúc được chạy trên **Docker Containers** và quản lý bằng **Docker Compose**.
+- Các Services chia sẻ chung một mạng nội bộ ảo `hotel-network`.
+- Databases PostgreSQL không được phơi bày (expose) port ra ngoài Internet, chỉ các service backend mới có quyền gọi vào.
+- API Gateway (Kong/Express Gateway) là cửa ngõ duy nhất mở port `8080` ra ngoài để nhận traffic từ Client.
 
-### 6.1 Deployment Architecture
-```mermaid
-graph TD
-    Internet((Internet)) --> FE[Frontend Container<br>:3000]
-    Internet --> GW[API Gateway Container<br>:8080]
-    
-    subgraph Docker Compose Network
-        GW --> AU[Auth Service]
-        GW --> RM[Room Service]
-        GW --> BK[Booking Service]
-        GW --> PY[Payment Service]
-        
-        AU --> DBU[(PostgreSQL<br>Auth)]
-        RM --> DBR[(PostgreSQL<br>Room)]
-        BK --> DBB[(PostgreSQL<br>Booking)]
-        PY --> DBP[(PostgreSQL<br>Payment)]
-        
-        BK -.-> NT[Notification Service]
-        NT --> MH[Mailhog<br>SMTP]
-    end
-```
+### 7.2 Observability & Fault Tolerance
+- **Health Checks**: Mỗi service (Auth, Room, Booking, Payment) đều phải cài đặt endpoint `GET /health` để Load Balancer hoặc Docker engine theo dõi tình trạng sống còn của container.
+- **Auto-Restart**: Các container được cấu hình `restart: unless-stopped` trong docker-compose.yml. Nếu code bị crash, Docker sẽ tự động dựng lại.
+- **Log Aggregation (Dự kiến)**: Các service in log ra `stdout/stderr` theo chuẩn JSON để dễ dàng tích hợp ELK stack (Elasticsearch, Logstash, Kibana) trong tương lai.
