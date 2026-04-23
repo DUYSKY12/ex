@@ -161,24 +161,24 @@ Hệ thống được thiết kế hoàn toàn theo mô hình **Cloud-Native / C
 
 ```mermaid
 graph TD
-    subgraph Máy chủ Host (Server / Cloud VM)
-        Internet((Internet)) -->|Port 3000| FE(Frontend Container)
-        Internet -->|Port 8080| GW(API Gateway Container)
-        Internet -.->|Port 8025 (Dev only)| MH(Mailhog UI)
+    subgraph host ["Máy chủ Host (Server / Cloud VM)"]
+        Internet((Internet)) -->|Port 3000| FE("Frontend Container")
+        Internet -->|Port 8080| GW("API Gateway Container")
+        Internet -.->|"Port 8025 (Dev only)"| MH("Mailhog UI")
         
-        subgraph Docker Bridge Network (Isolated)
-            GW -->|HTTP| AU_App(Auth Container)
-            GW -->|HTTP| RM_App(Room Container)
-            GW -->|HTTP| BK_App(Booking Container)
-            GW -->|HTTP| PY_App(Payment Container)
+        subgraph docker_net ["Docker Bridge Network (Isolated)"]
+            GW -->|HTTP| AU_App("Auth Container")
+            GW -->|HTTP| RM_App("Room Container")
+            GW -->|HTTP| BK_App("Booking Container")
+            GW -->|HTTP| PY_App("Payment Container")
             
-            BK_App -.->|Async| NT_App(Notification Container)
+            BK_App -.->|Async| NT_App("Notification Container")
             NT_App -->|SMTP| MH
             
-            AU_App -->|TCP 5432| AU_DB[(PostgreSQL Auth)]
-            RM_App -->|TCP 5432| RM_DB[(PostgreSQL Room)]
-            BK_App -->|TCP 5432| BK_DB[(PostgreSQL Booking)]
-            PY_App -->|TCP 5432| PY_DB[(PostgreSQL Payment)]
+            AU_App -->|TCP 5432| AU_DB[("PostgreSQL Auth")]
+            RM_App -->|TCP 5432| RM_DB[("PostgreSQL Room")]
+            BK_App -->|TCP 5432| BK_DB[("PostgreSQL Booking")]
+            PY_App -->|TCP 5432| PY_DB[("PostgreSQL Payment")]
         end
     end
 ```
