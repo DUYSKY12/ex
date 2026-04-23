@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.main import app
 from src.database import get_db, Base
+from src.models import Booking  # Import to register with Base
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
