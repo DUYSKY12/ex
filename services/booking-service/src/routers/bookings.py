@@ -16,6 +16,30 @@ def get_current_user_id(x_user_id: Optional[str] = Header(None)):
 
 @router.post("", response_model=BookingResponse, status_code=201)
 def create_booking(booking: BookingCreate, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
+    """
+    Saga Pattern - Booking Creation Workflow:
+    
+    ```mermaid
+    sequenceDiagram
+        autonumber
+        actor User as Khách hàng
+        participant Booking as Booking Service
+        participant Room as Room Service
+        
+        User->>Booking: POST /bookings (room_id, check_in, check_out)
+        Booking->>Room: GET /rooms/{room_id}
+        Room-->>Booking: Trả về trạng thái & giá
+        
+        alt Nếu status != "available"
+            Booking-->>User: 409 Conflict
+        else Nếu status == "available"
+            Booking->>Booking: Tính toán tổng tiền & Lưu vào DB (PENDING)
+            Booking->>Room: PATCH /rooms/{room_id}/status (status='booked')
+            Room-->>Booking: 200 OK
+            Booking-->>User: 201 Created
+        end
+    ```
+    """
     if booking.check_in >= booking.check_out:
         raise HTTPException(status_code=400, detail={"error": "BadRequest", "message": "Check-out must be after check-in"})
     
