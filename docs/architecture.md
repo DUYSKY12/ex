@@ -1,169 +1,188 @@
-# 🏗️ System Architecture — Hotel Booking System
+# 🏗️ In-Depth System Architecture — Hotel Booking Microservices
 
-## 1. Overview
+## 1. Executive Summary & Architectural Drivers
 
-Hệ thống đặt phòng khách sạn trực tuyến cho phép khách hàng đăng ký, đăng nhập, tìm kiếm phòng, đặt phòng và thanh toán. Quản trị viên có thể quản lý phòng và theo dõi toàn bộ đặt phòng.
+Hệ thống đặt phòng khách sạn trực tuyến được thiết kế theo kiến trúc **Microservices** nhằm giải quyết các hạn chế của hệ thống Monolithic (nguyên khối) truyền thống. Kiến trúc này mang lại khả năng mở rộng linh hoạt, cho phép từng nhóm phát triển (Team) triển khai độc lập các miền nghiệp vụ (Domain).
 
-- **Problem**: Tự động hóa quy trình đặt phòng, tích hợp xác thực và thanh toán, thay thế quy trình thủ công
-- **Target users**: Khách hàng đặt phòng, Admin quản lý khách sạn
-- **Key quality attributes**: Bảo mật (JWT), module hóa, mỗi service scale độc lập, dễ triển khai bằng Docker
-
----
-
-## 2. Architecture Style
-
-- [x] Microservices
-- [x] API Gateway pattern — xác thực JWT tập trung tại Gateway, forward `X-User-Id` và `X-User-Role` cho các service
-- [ ] Event-driven / Message queue
-- [ ] CQRS / Event Sourcing
-- [x] Database per service
-- [ ] Saga pattern
+**Các yếu tố thúc đẩy kiến trúc (Architectural Drivers):**
+- **Agility & Maintainability**: Phân tách ranh giới rõ ràng (Bounded Contexts) giúp code dễ bảo trì.
+- **Scalability**: Khả năng scale up độc lập (VD: Dịch vụ Tìm phòng - Room Service thường chịu tải cao nhất, có thể scale gấp 3 lần dịch vụ Thanh toán).
+- **Resilience (Khả năng chịu lỗi)**: Sự cố ở một module (VD: Gửi email thất bại) không được phép làm sập toàn bộ quy trình đặt phòng.
+- **Security**: Xác thực tập trung và bảo mật luồng dữ liệu nội bộ.
 
 ---
 
-## 3. System Components
+## 2. Architectural Styles & Design Patterns
 
-| Component                | Responsibility                                                    | Port  | Người phụ trách  |
-|--------------------------|-------------------------------------------------------------------|-------|------------------|
-| **Frontend**             | Giao diện web — đặt phòng, thanh toán, quản lý admin             | 3000  | Mạc Triệu Sơn    |
-| **Gateway**              | API routing, xác thực JWT tập trung, rate limiting, request log   | 8080  | Mạc Triệu Sơn    |
-| **Auth Service**         | Đăng ký, đăng nhập, xác thực JWT, quản lý user                   | 5001  | Phạm Thành Đạt   |
-| **Room Service**         | Quản lý thông tin phòng khách sạn (CRUD), tìm phòng theo ngày    | 5002  | Phạm Thành Đạt   |
-| **Booking Service**      | Quản lý đặt phòng, hủy phòng, lịch sử booking                    | 5003  | Lê Bùi Anh Duy   |
-| **Notification Service** | Gửi email xác nhận đặt phòng / hủy phòng qua Mailhog             | 5004  | Lê Bùi Anh Duy   |
-| **Payment Service**      | Xử lý thanh toán, hoàn tiền, thống kê doanh thu                  | 5005  | Mạc Triệu Sơn    |
-| **Database Auth**        | Lưu dữ liệu User (PostgreSQL)                                     | —     | —                |
-| **Database Room**        | Lưu dữ liệu Room (PostgreSQL)                                     | —     | —                |
-| **Database Booking**     | Lưu dữ liệu Booking (PostgreSQL)                                  | —     | —                |
-| **Database Payment**     | Lưu dữ liệu Payment (PostgreSQL)                                  | —     | —                |
-| **Database Notification**| Lưu lịch sử Notification (PostgreSQL)                             | —     | —                |
-| **Mailhog**              | Mock SMTP server để test email (không cần email thật)             | 8025  | —                |
+Hệ thống tuân thủ chặt chẽ các mẫu thiết kế (Patterns) phân tán hiện đại:
 
-> Các database chỉ giao tiếp nội bộ trong Docker network, không expose port ra host.
+1. **Microservices Architecture**: Phân tách hệ thống thành 5 dịch vụ độc lập (Auth, Room, Booking, Payment, Notification).
+2. **API Gateway Pattern**: Sử dụng một điểm vào duy nhất (Single Entrypoint) để ẩn đi độ phức tạp của mạng lưới microservices phía sau.
+3. **Database-per-Service Pattern**: Mỗi Microservice sở hữu hoàn toàn một Database PostgreSQL vật lý riêng. Không có chuyện Service này query trực tiếp vào DB của Service khác.
+4. **Saga Pattern (Orchestration)**: Đảm bảo tính nhất quán dữ liệu (Data Consistency) khi một giao dịch kinh doanh (Đặt phòng) trải dài qua nhiều services mà không thể dùng ACID Transaction.
+5. **API Composition Pattern**: Frontend sẽ đóng vai trò tổng hợp dữ liệu từ nhiều nguồn (VD: Lấy thông tin phòng từ Room Service và trạng thái thanh toán từ Payment Service) thông qua Gateway.
 
 ---
 
-## 4. Communication Patterns
+## 3. High-Level Architecture Diagram (C4 Model - Container View)
 
-- **Synchronous REST**: Tất cả giao tiếp chính giữa các service
-- **Asynchronous (fire-and-forget)**: Booking Service gửi notification — không chờ response
-- **Authentication**: Gateway xác thực JWT với Auth Service **một lần duy nhất**, sau đó forward `X-User-Id` và `X-User-Role` trong header — các service downstream không cần tự xác thực lại
-- **Service Discovery**: Docker Compose DNS (dùng tên service: `auth-service`, `room-service`, v.v.)
+```mermaid
+C4Context
+    title Kiến trúc Tổng thể (Container View)
+    
+    Person(guest, "Khách hàng", "Người dùng tìm và đặt phòng")
+    Person(admin, "Quản trị viên", "Quản lý khách sạn")
+    
+    System_Boundary(hotel_sys, "Hệ thống Đặt phòng Khách sạn") {
+        Container(webapp, "Web Frontend", "React/Vue", "Giao diện người dùng")
+        Container(gateway, "API Gateway", "Node.js / Nginx", "Định tuyến, Xác thực tập trung, Rate Limiting")
+        
+        Container(auth_svc, "Auth Service", "Python/Node", "Quản lý danh tính và JWT")
+        Container(room_svc, "Room Service", "Python/Node", "Quản lý danh mục phòng trống")
+        Container(booking_svc, "Booking Service", "Python/Node", "Orchestrator luồng đặt phòng")
+        Container(payment_svc, "Payment Service", "Python/Node", "Xử lý giao dịch thanh toán")
+        Container(notif_svc, "Notification Service", "Python/Node", "Xử lý gửi Email")
+        
+        ContainerDb(db_auth, "Auth DB", "PostgreSQL", "Lưu User")
+        ContainerDb(db_room, "Room DB", "PostgreSQL", "Lưu Room")
+        ContainerDb(db_booking, "Booking DB", "PostgreSQL", "Lưu Booking")
+        ContainerDb(db_payment, "Payment DB", "PostgreSQL", "Lưu Transaction")
+        System_Ext(mailhog, "Mailhog", "Mock SMTP Server")
+    }
 
-### Inter-service Communication Matrix
-
-| From → To              | Auth          | Room  | Booking | Notification | Payment | Gateway       | DB  |
-|------------------------|---------------|-------|---------|--------------|---------|---------------|-----|
-| **Frontend**           |               |       |         |              |         | REST          |     |
-| **Gateway**            | REST (verify) | REST  | REST    |              | REST    |               |     |
-| **Auth Service**       |               |       |         |              |         |               | SQL |
-| **Room Service**       |               |       |         |              |         |               | SQL |
-| **Booking Service**    |               | REST  |         | REST (async) | REST    |               | SQL |
-| **Notification Service**|              |       |         |              |         |               | SQL |
-| **Payment Service**    |               |       | REST    |              |         |               | SQL |
-
----
-
-## 5. Gateway Routing Table
-
-| External Path     | Forward tới              | Internal URL                        |
-|-------------------|--------------------------|-------------------------------------|
-| `/api/auth/*`     | auth-service             | `http://auth-service:5001/*`        |
-| `/api/rooms/*`    | room-service             | `http://room-service:5002/*`        |
-| `/api/bookings/*` | booking-service          | `http://booking-service:5003/*`     |
-| `/api/payments/*` | payment-service          | `http://payment-service:5005/*`     |
-| `/health`         | gateway (self)           | —                                   |
-
-> Notification Service không có route qua Gateway — chỉ nhận request nội bộ từ Booking Service.
-
----
-
-## 6. Data Flow
-
-### Luồng đăng nhập
-```
-User → Frontend → Gateway → Auth Service → DB Auth
-                          ← JWT token
-       Frontend ← Gateway ← JWT token
-```
-
-### Luồng đặt phòng (đã đăng nhập)
-```
-User → Frontend → Gateway → Auth Service (verify JWT)
-                           → Booking Service (X-User-Id, X-User-Role)
-                               → Room Service (GET /rooms/available?check_in&check_out)
-                               → Room Service (PATCH /rooms/{id}/status: booked)
-                               → DB Booking (tạo booking, status: pending)
-                               → Notification Service (async: gửi email xác nhận)
-       Frontend ← Gateway ← Booking (status: pending)
-```
-
-### Luồng thanh toán
-```
-User → Frontend → Gateway → Auth Service (verify JWT)
-                           → Payment Service (X-User-Id)
-                               → Booking Service (PATCH /bookings/{id}/confirm)
-                               → DB Payment (lưu giao dịch, status: success)
-       Frontend ← Gateway ← Payment success
-```
-
-### Luồng hủy đặt phòng
-```
-User → Frontend → Gateway → Auth Service (verify JWT)
-                           → Booking Service (X-User-Id)
-                               → Room Service (PATCH /rooms/{id}/status: available)
-                               → Payment Service (POST /payments/{payment_id}/refund)
-                               → DB Booking (status: cancelled)
-                               → Notification Service (async: gửi email hủy)
-       Frontend ← Gateway ← Booking cancelled + refund
+    Rel(guest, webapp, "Sử dụng")
+    Rel(admin, webapp, "Quản trị")
+    Rel(webapp, gateway, "Gửi API Requests", "HTTPS/REST")
+    
+    Rel(gateway, auth_svc, "Xác thực Token / Forward Route")
+    Rel(gateway, room_svc, "Forward Route")
+    Rel(gateway, booking_svc, "Forward Route")
+    Rel(gateway, payment_svc, "Forward Route")
+    
+    Rel(auth_svc, db_auth, "Đọc/Ghi")
+    Rel(room_svc, db_room, "Đọc/Ghi")
+    Rel(booking_svc, db_booking, "Đọc/Ghi")
+    Rel(payment_svc, db_payment, "Đọc/Ghi")
+    
+    Rel(booking_svc, room_svc, "RPC Gọi cập nhật phòng")
+    Rel(payment_svc, booking_svc, "RPC Xác nhận thanh toán")
+    Rel(booking_svc, notif_svc, "Async Event gửi Mail")
+    Rel(notif_svc, mailhog, "Gửi Email", "SMTP")
 ```
 
 ---
 
-## 7. Architecture Diagram
+## 4. Security Architecture (Identity Translation)
+
+Thay vì yêu cầu mỗi Service phải tự mang thư viện giải mã JWT và gọi tới Auth Service liên tục (gây thắt cổ chai hiệu năng), kiến trúc áp dụng mô hình **Identity Translation tại Gateway**:
+
+1. Client gửi Request kèm Header: `Authorization: Bearer <JWT>`.
+2. API Gateway chặn Request lại, tự động giải mã JWT (hoặc gọi nội bộ sang Auth Service để verify).
+3. Nếu JWT hợp lệ, Gateway **bóc tách (decode)** thông tin user và gắn vào Headers nội bộ:
+   - `X-User-Id: 12345`
+   - `X-User-Role: GUEST`
+4. Gateway loại bỏ Header `Authorization` cũ và đẩy Request xuống các Services bên dưới.
+5. Các Services (Room, Booking) nằm sâu trong mạng nội bộ (Private Network) sẽ **tin tưởng tuyệt đối** các Header `X-User-*` này và xử lý nghiệp vụ mà không cần xác thực lại.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway
+    participant Auth Service
+    participant Booking Service
+    
+    Client->>Gateway: GET /api/bookings (Bearer <JWT>)
+    Gateway->>Auth Service: Verify Token
+    Auth Service-->>Gateway: Hợp lệ (ID: 123, Role: GUEST)
+    Note over Gateway: Dịch Token thành Header nội bộ
+    Gateway->>Booking Service: GET /bookings (X-User-Id: 123)
+    Booking Service-->>Gateway: Trả về dữ liệu Booking của user 123
+    Gateway-->>Client: HTTP 200 OK
+```
+
+---
+
+## 5. Communication & Data Flow
+
+Hệ thống kết hợp cả **Synchronous (Đồng bộ)** và **Asynchronous (Bất đồng bộ)** để tối ưu trải nghiệm.
+
+### 5.1 Synchronous Communication (REST API)
+Sử dụng RESTful API qua giao thức HTTP cho các thao tác yêu cầu phản hồi ngay lập tức:
+- Gateway -> Microservices.
+- Booking Service -> Room Service (Để kiểm tra phòng có thực sự trống ngay tại giây phút đặt hay không).
+
+### 5.2 Asynchronous Communication
+Dùng cho các tác vụ tốn thời gian, không ảnh hưởng đến luồng chính (Fire-and-forget):
+- Cụ thể: Việc gửi Email thông báo. Khi Booking thành công, Booking Service chỉ việc ném ra một HTTP Async Request (hoặc đưa vào Message Queue nếu có) tới Notification Service, rồi lập tức trả kết quả cho Client, không cần chờ SMTP server thực sự gửi mail xong.
+
+### 5.3 Ma trận giao tiếp (Inter-service Communication Matrix)
+
+| Gọi Từ \ Gọi Tới | Auth | Room | Booking | Payment | Notification |
+|------------------|------|------|---------|---------|--------------|
+| **Gateway**      | Xác thực Token | REST (Forward) | REST (Forward) | REST (Forward) | - |
+| **Booking**      | - | REST (Kiểm tra & Cập nhật trạng thái) | - | - | REST Async (Báo gửi Mail) |
+| **Payment**      | - | - | REST (Webhook báo thanh toán OK) | - | - |
+
+---
+
+## 6. Service Internal Architecture (Kiến trúc bên trong Service)
+
+Mỗi Microservice không viết code nguyên khối, mà tuân thủ **Layered Architecture (Kiến trúc phân lớp)**:
+1. **Router / Controller Layer**: Tiếp nhận HTTP Request, validate tham số đầu vào.
+2. **Service / Business Logic Layer**: Chứa toàn bộ logic nghiệp vụ (domain logic).
+3. **Repository / Data Access Layer**: Chuyên biệt hóa việc tương tác với PostgreSQL (Dùng ORM như SQLAlchemy / Prisma).
+
+*Nguyên tắc: Controller không được gọi thẳng DB, và Repository không chứa logic nghiệp vụ.*
+
+---
+
+## 7. Deployment & Infrastructure Architecture
+
+Hệ thống được thiết kế hoàn toàn theo mô hình **Cloud-Native / Containerized**:
+
+- **Dockerization**: Mọi thành phần (Code, Database, Mock Server) đều được đóng gói thành Docker Image. Đảm bảo tính nhất quán giữa môi trường Dev, Test và Production ("It works on my machine").
+- **Docker Network**:
+  - Tạo một mạng bridge riêng biệt (VD: `hotel_backend_net`).
+  - Các DB Container hoàn toàn **cách ly khỏi Internet**, không map cổng (ports) ra máy host (Tránh rò rỉ dữ liệu).
+  - Chỉ có container API Gateway và Frontend mới được map cổng (8080, 3000) ra ngoài Internet.
+- **Service Discovery**: Dựa vào DNS nội bộ của Docker. Gateway muốn gọi Room Service chỉ cần gọi vào hostname `http://room-service:5002`.
+
+### Biểu đồ Triển khai (Deployment Diagram)
 
 ```mermaid
 graph TD
-    U[👤 User / Admin] --> FE[Frontend\n:3000]
-    FE --> GW[API Gateway\n:8080]
-
-    GW -->|verify JWT| AU[Auth Service\n:5001]
-    GW -->|X-User-Id, X-User-Role| RM[Room Service\n:5002]
-    GW -->|X-User-Id, X-User-Role| BK[Booking Service\n:5003]
-    GW -->|X-User-Id, X-User-Role| PY[Payment Service\n:5005]
-
-    AU --> DBA[(DB Auth)]
-    RM --> DBR[(DB Room)]
-    BK --> DBB[(DB Booking)]
-    PY --> DBP[(DB Payment)]
-    NT --> DBN[(DB Notification)]
-
-    BK -->|kiểm tra & cập nhật phòng| RM
-    BK -->|hoàn tiền| PY
-    PY -->|confirm booking| BK
-    BK -.->|async email| NT[Notification Service\n:5004]
-    NT --> MH[Mailhog\nMock SMTP\n:8025]
+    subgraph Máy chủ Host (Server / Cloud VM)
+        Internet((Internet)) -->|Port 3000| FE(Frontend Container)
+        Internet -->|Port 8080| GW(API Gateway Container)
+        Internet -.->|Port 8025 (Dev only)| MH(Mailhog UI)
+        
+        subgraph Docker Bridge Network (Isolated)
+            GW -->|HTTP| AU_App(Auth Container)
+            GW -->|HTTP| RM_App(Room Container)
+            GW -->|HTTP| BK_App(Booking Container)
+            GW -->|HTTP| PY_App(Payment Container)
+            
+            BK_App -.->|Async| NT_App(Notification Container)
+            NT_App -->|SMTP| MH
+            
+            AU_App -->|TCP 5432| AU_DB[(PostgreSQL Auth)]
+            RM_App -->|TCP 5432| RM_DB[(PostgreSQL Room)]
+            BK_App -->|TCP 5432| BK_DB[(PostgreSQL Booking)]
+            PY_App -->|TCP 5432| PY_DB[(PostgreSQL Payment)]
+        end
+    end
 ```
 
 ---
 
-## 8. Deployment
+## 8. Resilience & Scalability Strategy (Chiến lược Chịu lỗi và Mở rộng)
 
-- Toàn bộ services containerized với Docker
-- Orchestration bằng Docker Compose
-- Khởi động bằng một lệnh duy nhất: `docker compose up --build`
-- Mỗi service có Dockerfile riêng
-- Mỗi service có database PostgreSQL riêng (database per service pattern)
-- Mailhog chạy như một container riêng, giao diện xem email tại `http://localhost:8025`
-- Biến môi trường cấu hình qua file `.env`
-
----
-
-## 9. Scalability & Fault Tolerance
-
-- **Scale độc lập**: Mỗi service là container riêng biệt, có thể tăng replica độc lập
-- **Fault isolation**: Một service gặp lỗi không làm sập toàn hệ thống
-- **Async notification**: Notification Service lỗi không ảnh hưởng luồng đặt phòng chính
-- **Health checks**: Mỗi service expose `GET /health → {"status": "ok"}`
-- **Restart policy**: Docker Compose cấu hình `restart: unless-stopped`
-- **Data isolation**: Mỗi service có database riêng, không truy cập chéo
+1. **Auto-Restart & Recovery**:
+   - Sử dụng `restart: unless-stopped` trong cấu hình triển khai. Nếu một service bị crash do lỗi Memory/Code, Docker engine sẽ lập tức khởi động lại nó trong tích tắc.
+2. **Stateless Services**:
+   - Toàn bộ các service Backend đều được thiết kế phi trạng thái (Stateless). JWT không lưu trên RAM của server, dữ liệu phiên làm việc không tồn tại trên app.
+   - Lợi ích: Có thể dễ dàng quay nhiều container (Scale out) của Room Service ra phía sau Load Balancer mà không lo mất đồng bộ.
+3. **Data Consistency Handling (Saga)**:
+   - Áp dụng các "Compensating Transactions" trong chuỗi cung ứng Đặt phòng để đảm bảo nếu hệ thống Payment lăn ra chết giữa chừng, Booking Service sẽ tự động liên hệ Room Service nhả lại phòng trống, ngăn chặn tình trạng "Phòng ảo".
+4. **Health Checks**:
+   - Tích hợp endpoint `/health` trả về `200 OK` để công cụ orchestration (Docker Swarm / Kubernetes sau này) biết container vẫn đang sống và sẵn sàng nhận traffic.
