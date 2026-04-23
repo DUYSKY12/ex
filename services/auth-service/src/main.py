@@ -1,20 +1,15 @@
 from fastapi import FastAPI
-from src.database import Base, engine
+from src.database import engine, Base
 from src.routers import auth, users
 
-app = FastAPI(
-    title="Auth Service",
-    description="Xác thực và phân quyền người dùng",
-    version="1.0.0",
-)
-
-# Tạo bảng khi khởi động
+# Tạo các bảng trong CSDL
 Base.metadata.create_all(bind=engine)
 
-# Đăng ký routers
+app = FastAPI(title="Auth Service", version="1.0.0")
+
 app.include_router(auth.router)
 app.include_router(users.router)
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@app.get("/health", tags=["health"])
+def health_check():
+    return {"status": "ok", "service": "auth-service"}

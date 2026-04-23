@@ -1,8 +1,12 @@
-# API Gateway — Dockerfile
-# Replace with your actual setup.
-# See .ai/prompts/create-dockerfile.md for templates (Node.js, Python, Go, Nginx).
-#
-# Requirements: expose port 8000, route to backend services.
+FROM node:20-alpine
 
-# TODO: Replace with your actual Dockerfile.
-FROM scratch
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm install --production
+
+COPY src/ ./src/
+
+EXPOSE 8080
+
+CMD ["npm", "start"]
