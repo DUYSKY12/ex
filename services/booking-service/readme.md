@@ -1,42 +1,103 @@
-# Service B
+# 🏨 Booking Service (Service B - Quản lý đặt phòng)
 
-> Rename this to match your actual service name (e.g., `product-service`, `payment-service`).
+**Người phụ trách:** Lê Bùi Anh Duy - B22DCVT101  
+**Vai trò hệ thống:** Orchestrator (Điều phối viên) của quy trình Đặt phòng.
 
-## Overview
+## 1. 🌟 Tổng quan (Overview)
 
-Describe the responsibility of this service:
-- What business domain does it cover?
-- What data does it own?
-- What operations does it expose?
+**Booking Service** là vi dịch vụ cốt lõi trong hệ thống quản lý khách sạn. Nó chịu trách nhiệm chính trong việc xử lý các giao dịch đặt phòng của khách hàng. Do yêu cầu của mô hình Microservices phân tán (mỗi service 1 database riêng), Booking Service sử dụng **Saga Pattern** để đảm bảo tính nhất quán dữ liệu giữa Booking DB và Room DB.
 
-## Tech Stack
+**Dữ liệu quản lý (Data Ownership):**
+- Danh sách các Đơn đặt phòng (Bookings).
+- Trạng thái của đơn (Pending, Confirmed, Cancelled).
+- Tổng chi phí lưu trú của đơn đặt.
 
-| Component  | Choice             |
-|------------|--------------------|
-| Language   | *(e.g., Python, Node.js, Java, Go, C#)* |
-| Framework  | *(e.g., FastAPI, Express, Spring Boot)*  |
-| Database   | *(e.g., PostgreSQL, MongoDB, MySQL)*     |
+## 2. 🛠️ Công nghệ sử dụng (Tech Stack)
 
-## API Endpoints
+| Component | Lựa chọn | Lý do |
+| --- | --- | --- |
+| **Language** | Python 3.10 | Cú pháp rõ ràng, triển khai nhanh. |
+| **Framework** | FastAPI | Cung cấp sẵn Swagger UI, xử lý Asynchronous cực nhanh. |
+| **Database** | PostgreSQL | RDBMS mạnh mẽ, hỗ trợ Transaction tốt. |
+| **ORM** | SQLAlchemy | Truy vấn CSDL hướng đối tượng, an toàn chống SQL Injection. |
 
-| Method | Endpoint      | Description          |
-|--------|---------------|----------------------|
-| GET    | `/`           | Health check         |
-| GET    | `/resources`  | List all resources   |
-| POST   | `/resources`  | Create a resource    |
-| ...    | ...           | ...                  |
+## 3. 🔄 Luồng Hoạt Động Cốt Lõi (Booking Workflow - Saga Pattern)
 
-> Full API specification: [`docs/api-specs/service-b.yaml`](../../docs/api-specs/service-b.yaml)
+Để đảm bảo hai Database khác nhau đồng bộ dữ liệu (Khách đặt phòng xong thì phòng đó bên kia không ai được phép đặt nữa), hệ thống đã cài đặt **Saga Pattern (Choreography/Orchestration)**.
 
-## Running Locally
+### Sơ đồ Tuần tự Đặt phòng (Booking Sequence Diagram)
 
-```bash
-# From project root
-docker compose up service-b --build
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Khách hàng
+    participant BookingDB as Booking DB
+    participant Booking as Booking Service
+    participant Room as Room Service
+    participant RoomDB as Room DB
+
+    User->>Booking: POST /bookings (room_id, check_in, check_out)
+    Note over Booking: Tiếp nhận yêu cầu đặt phòng
+    
+    %% Bước 1: Kiểm tra phòng
+    Booking->>Room: GET /rooms/{room_id}
+    Room->>RoomDB: Truy vấn thông tin
+    RoomDB-->>Room: Dữ liệu phòng
+    Room-->>Booking: Trả về trạng thái & Giá
+    
+    alt Nếu status != "available"
+        Booking-->>User: 409 Conflict (Báo lỗi đã có người đặt)
+    else Nếu status == "available"
+        %% Bước 2: Tạo Booking
+        Note over Booking: Tính tiền = (check_out - check_in) * giá
+        Booking->>BookingDB: INSERT bookings (status='pending')
+        BookingDB-->>Booking: Thành công
+        
+        %% Bước 3: Khóa phòng (Saga Pattern)
+        Booking->>Room: PATCH /rooms/{room_id}/status (status='booked')
+        Room->>RoomDB: UPDATE rooms SET status='booked'
+        RoomDB-->>Room: Thành công
+        Room-->>Booking: 200 OK
+        
+        %% Hoàn tất
+        Booking-->>User: 201 Created (Đơn đặt phòng hoàn thành)
+    end
 ```
 
-## Testing
+### Diễn giải Chi Tiết:
+1. **Tiếp nhận Yêu cầu:** `Booking Service` tiếp nhận thời gian Check-in, Check-out và mã phòng.
+2. **Xác thực phòng (RPC Call):** Gọi ngay sang `Room Service` để kiểm tra phòng còn trống không. Nếu trống, lấy giá gốc.
+3. **Tính toán & Khởi tạo (Pending):** Tính `Tổng tiền` và ghi nhận giao dịch vào cơ sở dữ liệu `Booking DB` với trạng thái chờ thanh toán (`pending`).
+4. **Khóa Phòng (Saga Phase 1):** Gọi HTTP PATCH sang `Room Service` yêu cầu đổi cờ phòng thành `booked`. Điều này giúp không ai khác có thể vào "giành" phòng này nữa.
 
+### Giao dịch Bồi hoàn (Compensating Transaction) khi Hủy Phòng
+Nếu khách hàng hủy đặt phòng, hoặc không thanh toán kịp:
+- Booking Service sẽ đổi trạng thái Đơn về `cancelled`.
+- Nó sẽ gọi ngược lại Room Service yêu cầu trả phòng về lại trạng thái `available`.
+- *(Đảm bảo không bao giờ bị dính lỗi "phòng ma" bị khóa mà không có người dùng).*
+
+## 4. 🌐 Cổng Giao Tiếp (API Endpoints)
+
+*(Đã được đính kèm CORS Middleware để Frontend có thể trực tiếp gọi).*
+
+| Method | Endpoint | Authorization | Body Payload | Description |
+|---|---|---|---|---|
+| POST | `/bookings` | X-User-Id | `{room_id, check_in, check_out}` | Tạo giao dịch Đặt phòng (Saga trigger). |
+| GET | `/bookings` | X-User-Id | N/A | Danh sách các đơn đặt phòng của User hiện tại. |
+| PATCH | `/bookings/{id}/confirm`| Internal Only | `{payment_id}` | (Payment Service gọi) Xác nhận đã thanh toán. |
+| PATCH | `/bookings/{id}/cancel` | X-User-Id | N/A | Hủy đơn đặt và Trả lại phòng (Saga rollback). |
+
+> **Mẹo:** Khi chạy Project, bạn có thể xem Tài liệu cấu trúc API trực quan (Swagger UI) tại đường dẫn: `http://localhost:5003/docs`
+
+## 5. 🚀 Hướng Dẫn Khởi Chạy (Running Locally)
+
+**Chạy riêng lẻ bằng Docker (Từ thư mục gốc dự án):**
 ```bash
-# Add your test commands here
+docker compose up -d db-booking db-room room-service booking-service
 ```
+
+Sau khi chạy xong:
+- **API của bạn** sẽ Live tại: `http://localhost:5003`
+- **Swagger Documentation**: `http://localhost:5003/docs`
+
+*(Bạn cũng có thể mở file `index.html` đính kèm ngoài thư mục gốc để trực tiếp Test giao diện luồng Đặt phòng này).*
