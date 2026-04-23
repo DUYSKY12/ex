@@ -27,47 +27,57 @@ Hệ thống tuân thủ chặt chẽ các mẫu thiết kế (Patterns) phân t
 ## 3. High-Level Architecture Diagram (C4 Model - Container View)
 
 ```mermaid
-C4Context
-    title Kiến trúc Tổng thể (Container View)
-    
-    Person(guest, "Khách hàng", "Người dùng tìm và đặt phòng")
-    Person(admin, "Quản trị viên", "Quản lý khách sạn")
-    
-    System_Boundary(hotel_sys, "Hệ thống Đặt phòng Khách sạn") {
-        Container(webapp, "Web Frontend", "React/Vue", "Giao diện người dùng")
-        Container(gateway, "API Gateway", "Node.js / Nginx", "Định tuyến, Xác thực tập trung, Rate Limiting")
-        
-        Container(auth_svc, "Auth Service", "Python/Node", "Quản lý danh tính và JWT")
-        Container(room_svc, "Room Service", "Python/Node", "Quản lý danh mục phòng trống")
-        Container(booking_svc, "Booking Service", "Python/Node", "Orchestrator luồng đặt phòng")
-        Container(payment_svc, "Payment Service", "Python/Node", "Xử lý giao dịch thanh toán")
-        Container(notif_svc, "Notification Service", "Python/Node", "Xử lý gửi Email")
-        
-        ContainerDb(db_auth, "Auth DB", "PostgreSQL", "Lưu User")
-        ContainerDb(db_room, "Room DB", "PostgreSQL", "Lưu Room")
-        ContainerDb(db_booking, "Booking DB", "PostgreSQL", "Lưu Booking")
-        ContainerDb(db_payment, "Payment DB", "PostgreSQL", "Lưu Transaction")
-        System_Ext(mailhog, "Mailhog", "Mock SMTP Server")
-    }
+flowchart TD
+    %% Định dạng style cho dễ đọc
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    classDef gateway fill:#ff9,stroke:#333,stroke-width:2px,color:#000
+    classDef service fill:#bbf,stroke:#333,stroke-width:2px,color:#000
+    classDef db fill:#bfb,stroke:#333,stroke-width:2px,color:#000
+    classDef external fill:#ddd,stroke:#333,stroke-width:2px,color:#000
 
-    Rel(guest, webapp, "Sử dụng")
-    Rel(admin, webapp, "Quản trị")
-    Rel(webapp, gateway, "Gửi API Requests", "HTTPS/REST")
-    
-    Rel(gateway, auth_svc, "Xác thực Token / Forward Route")
-    Rel(gateway, room_svc, "Forward Route")
-    Rel(gateway, booking_svc, "Forward Route")
-    Rel(gateway, payment_svc, "Forward Route")
-    
-    Rel(auth_svc, db_auth, "Đọc/Ghi")
-    Rel(room_svc, db_room, "Đọc/Ghi")
-    Rel(booking_svc, db_booking, "Đọc/Ghi")
-    Rel(payment_svc, db_payment, "Đọc/Ghi")
-    
-    Rel(booking_svc, room_svc, "RPC Gọi cập nhật phòng")
-    Rel(payment_svc, booking_svc, "RPC Xác nhận thanh toán")
-    Rel(booking_svc, notif_svc, "Async Event gửi Mail")
-    Rel(notif_svc, mailhog, "Gửi Email", "SMTP")
+    Guest(["👤 Khách hàng"]):::actor
+    Admin(["👨‍💼 Quản trị viên"]):::actor
+
+    subgraph System ["Hệ thống Đặt phòng Khách sạn"]
+        FE["💻 Web Frontend (React/Vue)"]:::service
+        GW{"🚪 API Gateway"}:::gateway
+        
+        subgraph Microservices
+            AU["Auth Service"]:::service
+            RM["Room Service"]:::service
+            BK["Booking Service"]:::service
+            PY["Payment Service"]:::service
+            NT["Notification Service"]:::service
+        end
+
+        subgraph Databases
+            DBA[("Auth DB")]:::db
+            DBR[("Room DB")]:::db
+            DBB[("Booking DB")]:::db
+            DBP[("Payment DB")]:::db
+        end
+
+        MH["✉️ Mailhog (Mock SMTP)"]:::external
+    end
+
+    Guest -->|"Sử dụng"| FE
+    Admin -->|"Quản trị"| FE
+    FE -->|"REST/HTTPS"| GW
+
+    GW -->|"Verify Token"| AU
+    GW -->|"Forward"| RM
+    GW -->|"Forward"| BK
+    GW -->|"Forward"| PY
+
+    AU -->|"Đọc/Ghi"| DBA
+    RM -->|"Đọc/Ghi"| DBR
+    BK -->|"Đọc/Ghi"| DBB
+    PY -->|"Đọc/Ghi"| DBP
+
+    BK -->|"RPC Cập nhật phòng"| RM
+    PY -->|"RPC Xác nhận thanh toán"| BK
+    BK -.->|"Async Gửi mail"| NT
+    NT -->|"SMTP"| MH
 ```
 
 ---
