@@ -147,23 +147,22 @@ Dựa trên nguyên tắc *Service Autonomy* (Tự trị) và *Service Reusabili
 
 ```mermaid
 graph TD
-    Client[Client (Web/Mobile App)] -->|REST over HTTPS| API_GW[API Gateway<br>:8080]
+    Internet((Internet)) --> FE["Frontend Container<br>:3000"]
+    Internet --> GW["API Gateway Container<br>:8080"]
     
-    subgraph Private Docker Network
-        API_GW -->|Route /api/auth| US[Auth Service<br>:5001]
-        API_GW -->|Route /api/rooms| RS[Room Service<br>:5002]
-        API_GW -->|Route /api/bookings| BS[Booking Service<br>:5003]
-        API_GW -->|Route /api/payments| PS[Payment Service<br>:5005]
+    subgraph Docker Compose Network
+        GW --> AU[Auth Service]
+        GW --> RM[Room Service]
+        GW --> BK[Booking Service]
+        GW --> PY[Payment Service]
         
-        BS -->|REST RPC| RS
-        BS -->|REST RPC| PS
-        BS -.->|Async Message| NS[Notification Service<br>:5004]
+        AU --> DBU[("PostgreSQL<br>Auth")]
+        RM --> DBR[("PostgreSQL<br>Room")]
+        BK --> DBB[("PostgreSQL<br>Booking")]
+        PY --> DBP[("PostgreSQL<br>Payment")]
         
-        US --> DBU[(PostgreSQL<br>Auth)]
-        RS --> DBR[(PostgreSQL<br>Room)]
-        BS --> DBB[(PostgreSQL<br>Booking)]
-        PS --> DBP[(PostgreSQL<br>Payment)]
-        NS --> MH[Mailhog SMTP<br>:8025]
+        BK -.-> NT[Notification Service]
+        NT --> MH["Mailhog<br>SMTP"]
     end
 ```
 
