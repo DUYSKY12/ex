@@ -76,7 +76,23 @@ Nếu khách hàng hủy đặt phòng, hoặc không thanh toán kịp:
 - Nó sẽ gọi ngược lại Room Service yêu cầu trả phòng về lại trạng thái `available`.
 - *(Đảm bảo không bao giờ bị dính lỗi "phòng ma" bị khóa mà không có người dùng).*
 
-## 4. 🌐 Cổng Giao Tiếp (API Endpoints)
+## 4. 🤝 Các Service Liên Quan (External Dependencies)
+
+Trong kiến trúc Microservices, **Booking Service** không hoạt động cô lập mà đóng vai trò là nhạc trưởng (Orchestrator). Dưới đây là giải thích rõ ràng về các service liên quan và cách chúng phối hợp với Booking:
+
+1. **Room Service (Dịch vụ Phòng):**
+   - *Vai trò:* Cung cấp thông tin chi tiết về phòng (giá tiền, sức chứa) và bảo vệ quỹ phòng.
+   - *Giao tiếp:* Booking Service gọi API `GET` để lấy giá phòng tính tiền, và gọi `PATCH` để yêu cầu Room Service "khóa phòng" (chuyển sang `booked`) hoặc "nhả phòng" (chuyển về `available` khi hủy).
+   
+2. **Payment Service (Dịch vụ Thanh toán):**
+   - *Vai trò:* Xử lý giao dịch trừ tiền từ thẻ tín dụng/ví điện tử của khách hàng.
+   - *Giao tiếp:* Sau khi khách hàng đặt phòng (trạng thái `pending`), Payment Service sẽ xử lý thanh toán. Nếu thanh toán thành công, Payment Service tự động gọi ngược lại API `PATCH /bookings/{id}/confirm` của Booking Service để đổi trạng thái đơn sang `confirmed`.
+
+3. **Notification Service (Dịch vụ Thông báo):**
+   - *Vai trò:* Gửi Email hóa đơn xác nhận cho khách hàng.
+   - *Giao tiếp:* Giao tiếp bất đồng bộ (Asynchronous). Ngay khi đơn chuyển sang `confirmed`, Booking Service "bắn" một tín hiệu (Event) sang Notification Service rồi kết thúc công việc. Nó không cần đứng đợi Email được gửi đi thành công hay thất bại.
+
+## 5. 🌐 Cổng Giao Tiếp (API Endpoints)
 
 *(Đã được đính kèm CORS Middleware để Frontend có thể trực tiếp gọi).*
 
