@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <h2 class="section-tag" style="margin-bottom: 2rem;">ĐĂNG NHẬP</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="email" class="form-input" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Mật khẩu</label>
+                <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-submit">VÀO HỆ THỐNG</button>
+        </form>
+        <p style="margin-top: 1.5rem; text-align: center; color: #666;">
+            Chào mừng bạn quay lại hệ thống.
+        </p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('login-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const role = '{{ role }}';
+
+        const service = role === 'staff' ? 'staff' : 'customer';
+        const endpoint = 'api/auth/login';
+
+        try {
+            const resp = await fetch(`/api/proxy/${service}/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await resp.json();
+            if (resp.ok) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('role', role);
+                if (role === 'customer' && data.user?.id) {
+                    localStorage.setItem('customerId', data.user.id);
+                }
+                window.location.href = role === 'staff' ? '/staff-dashboard/' : '/';
+            } else {
+                alert(data.message || 'Đăng nhập thất bại.');
+            }
+        } catch (err) {
+            console.error('Login error:', err);
+            alert('Lỗi hệ thống. Thử lại sau.');
+        }
+    }
+</script>
+{% endblock %}

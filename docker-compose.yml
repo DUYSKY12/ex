@@ -1,0 +1,200 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8000"
+    depends_on:
+      customer-service:
+        condition: service_started
+      staff-service:
+        condition: service_started
+      laptop-service:
+        condition: service_started
+      mobile-service:
+        condition: service_started
+      clothes-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      ai-service:
+        condition: service_started
+    networks:
+      - shop-network
+    restart: always
+
+  customer-service:
+    build: ./customer-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DB_NAME=shop_db
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_HOST=mysql_db
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  staff-service:
+    build: ./staff-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DB_NAME=shop_db
+      - DB_USER=root
+      - DB_PASSWORD=password
+      - DB_HOST=mysql_db
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  laptop-service:
+    build: ./laptop-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_HOST=postgres_db
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  mobile-service:
+    build: ./mobile-service
+    ports:
+      - "8004:8004"
+    environment:
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_HOST=postgres_db
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  clothes-service:
+    build: ./clothes-service
+    ports:
+      - "8005:8005"
+    environment:
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_HOST=postgres_db
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  mysql_db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=shop_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - shop-network
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  postgres_db:
+    image: postgres:15
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - shop-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  product-service:
+    build: ./product-service
+    ports:
+      - "8006:8006"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/ecommerce_product_db
+      - PORT=8006
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - shop-network
+    restart: always
+
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8007:8007"
+    environment:
+      - PORT=8007
+      - NEO4J_URI=bolt://neo4j:7687
+    depends_on:
+      - neo4j
+    networks:
+      - shop-network
+    restart: always
+
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/password
+    networks:
+      - shop-network
+    restart: always
+
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - shop-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+networks:
+  shop-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  postgres-data:
+  mongodb-data:

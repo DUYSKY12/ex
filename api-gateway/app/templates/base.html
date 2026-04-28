@@ -1,0 +1,639 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AD Shop — Laptop & Điện thoại chính hãng</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        /* ===== CART SIDEBAR ===== */
+        .cart-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0);
+            z-index: 999;
+            pointer-events: none;
+            transition: background 0.35s ease;
+        }
+        .cart-overlay.open {
+            background: rgba(0,0,0,0.65);
+            pointer-events: all;
+            backdrop-filter: blur(6px);
+        }
+        .cart-sidebar {
+            position: fixed; top: 0; right: 0;
+            width: 400px; max-width: 100vw; height: 100vh;
+            background: #0a0a12;
+            border-left: 1px solid rgba(59,130,246,0.2);
+            z-index: 1000;
+            display: flex; flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.16,1,0.3,1);
+            box-shadow: -12px 0 60px rgba(0,0,0,0.7);
+        }
+        .cart-sidebar.open { transform: translateX(0); }
+
+        .cart-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .cart-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem; font-weight: 800; color: #fff;
+        }
+        .cart-close {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #888; width: 34px; height: 34px;
+            border-radius: 50%; cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .cart-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        .cart-body {
+            flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+
+        .cart-empty {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 0.75rem; padding: 4rem 1rem; text-align: center;
+        }
+        .cart-empty-icon { font-size: 3rem; opacity: 0.3; }
+        .cart-empty p { color: #ccc; font-weight: 600; }
+        .cart-empty span { color: #555; font-size: 0.85rem; }
+
+        .cart-item {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .cart-item:last-child { border-bottom: none; }
+        .cart-item-icon {
+            width: 50px; height: 50px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; flex-shrink: 0;
+        }
+        .cart-item-info { flex: 1; min-width: 0; }
+        .cart-item-name {
+            font-size: 0.88rem; font-weight: 600; color: #e5e5e5;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cart-item-sub { font-size: 0.8rem; color: #555; margin-top: 2px; }
+        .cart-item-price { color: #06b6d4; font-weight: 700; font-size: 0.9rem; }
+        .cart-qty {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; padding: 3px 10px;
+            font-size: 0.78rem; color: #ccc; font-weight: 600;
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .cart-item-remove {
+            background: none; border: none; cursor: pointer;
+            font-size: 1rem; color: #444; padding: 4px;
+            border-radius: 6px; transition: all 0.2s; flex-shrink: 0;
+        }
+        .cart-item-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+        .cart-footer {
+            padding: 1.25rem 1.5rem 2rem;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+        .cart-summary {
+            margin-bottom: 1.25rem;
+        }
+        .cart-row {
+            display: flex; justify-content: space-between;
+            padding: 5px 0; font-size: 0.88rem; color: #666;
+        }
+        .cart-row.total {
+            border-top: 1px solid rgba(255,255,255,0.07);
+            margin-top: 8px; padding-top: 12px;
+            font-size: 1rem; font-weight: 700; color: #f87171;
+        }
+        .btn-checkout {
+            width: 100%; padding: 1rem;
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            color: #fff; border: none; border-radius: 14px;
+            font-size: 1rem; font-weight: 700; cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Outfit', sans-serif;
+        }
+        .btn-checkout:hover:not(:disabled) {
+            box-shadow: 0 4px 24px rgba(59,130,246,0.5);
+            transform: translateY(-1px);
+        }
+        .btn-checkout:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .cart-loading {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 1rem; padding: 3rem 1rem; color: #666;
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid rgba(255,255,255,0.08);
+            border-top-color: #3b82f6; border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 2rem; right: 2rem;
+            z-index: 9999; padding: 1rem 1.5rem;
+            border-radius: 12px; font-weight: 700; font-size: 0.9rem;
+            border: 1px solid; display: flex; align-items: center; gap: 10px;
+            animation: slideUp 0.3s ease;
+        }
+        .toast.success { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: #6ee7b7; }
+        .toast.error { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+        @keyframes slideUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+
+
+
+        .nav-tab {
+            color: #b0b0b0;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            padding: 8px 12px;
+            position: relative;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 8px;
+        }
+
+        .nav-tab:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .nav-tab.active {
+            color: var(--brand-cyan);
+            background: rgba(6, 182, 212, 0.08);
+        }
+
+        /* ===== AI CHATBOT BUBBLE ===== */
+        .chatbot-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            color: white;
+            font-size: 28px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+        .chatbot-btn:hover {
+            transform: scale(1.1);
+        }
+        .chat-window {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 350px;
+            height: 500px;
+            background: #1e1e2d;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .chat-window.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #1e1e2d, #8b5cf6);
+            padding: 15px;
+            color: white;
+            font-weight: bold;
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .chat-close {
+            background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+        .chat-msg { max-width: 80%; padding: 10px 14px; border-radius: 15px; line-height: 1.4; }
+        .chat-msg.bot { background: rgba(139,92,246,0.15); color: #d8b4fe; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid rgba(139,92,246,0.3); }
+        .chat-msg.user { background: rgba(59,130,246,0.15); color: #93c5fd; align-self: flex-end; border-bottom-right-radius: 2px; border: 1px solid rgba(59,130,246,0.3); }
+        
+        .chat-input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: #1a1a24;
+        }
+        .chat-input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 8px 15px;
+            color: white;
+            outline: none;
+            font-family: inherit;
+        }
+        .chat-input:focus { border-color: #8b5cf6; }
+        .chat-send {
+            background: #8b5cf6; color: white;
+            border: none; border-radius: 50%;
+            width: 36px; height: 36px; margin-left: 8px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-wrapper">
+        <nav class="navbar">
+            <div class="nav-container">
+                <a href="/" class="nav-brand">
+                    AD <span>Shop</span>
+                </a>
+                
+                <div class="nav-middle">
+                    <div class="nav-tabs">
+                        <a href="/?cat=laptop" class="nav-tab" id="tab-laptop">Laptops</a>
+                        <a href="/?cat=mobile" class="nav-tab" id="tab-mobile">Mobiles</a>
+                        <a href="/?cat=clothes" class="nav-tab" id="tab-clothes">Clothes</a>
+                    </div>
+                    <div class="nav-search">
+                        <input type="text" id="global-search" class="nav-search-input" placeholder="Search products...">
+                    </div>
+                </div>
+
+                <div class="nav-links" id="nav-links"></div>
+            </div>
+        </nav>
+
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="footer">
+            <p>© 2026 <strong>AD Shop</strong> — Laptop & Điện Thoại Chính Hãng</p>
+        </footer>
+    </div>
+
+    <!-- Cart Overlay -->
+    <div id="cart-overlay" class="cart-overlay" onclick="closeCart()"></div>
+
+    <!-- Cart Sidebar -->
+    <div id="cart-sidebar" class="cart-sidebar">
+        <div class="cart-header">
+            <span class="cart-title">🛒 Giỏ hàng</span>
+            <button class="cart-close" onclick="closeCart()">✕</button>
+        </div>
+
+        <div class="cart-body" id="cart-body">
+            <div class="cart-loading">
+                <div class="spinner"></div>
+                <span>Đang tải giỏ hàng...</span>
+            </div>
+        </div>
+
+        <div class="cart-footer" id="cart-footer" style="display:none;">
+            <div class="cart-summary" id="cart-summary"></div>
+            <button class="btn-checkout" id="btn-checkout" onclick="checkout()">
+                ✅ Thanh toán ngay
+            </button>
+        </div>
+    </div>
+
+    <!-- AI Chatbot Bubble -->
+    <button class="chatbot-btn" onclick="toggleChat()" id="chatbot-toggle">✨</button>
+    <div class="chat-window" id="chat-window">
+        <div class="chat-header">
+            <div>💡 Trợ lý ảo AI</div>
+            <button class="chat-close" onclick="toggleChat()">✕</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg bot">👋 Xin chào! Mình là Bot AI. Mình có thể tư vấn sản phẩm từ Dữ liệu RAG và Knowledge Graph cho bạn. Bạn muốn tìm gì?</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" class="chat-input" id="chat-input-text" placeholder="Hỏi về MacBook, iPhone..." onkeypress="if(event.key==='Enter') sendChat()">
+            <button class="chat-send" onclick="sendChat()">➤</button>
+        </div>
+    </div>
+
+    <script>
+    // Chatbot Logic
+    function toggleChat() {
+        document.getElementById('chat-window').classList.toggle('open');
+    }
+    
+    async function sendChat() {
+        const inputStr = document.getElementById('chat-input-text').value.trim();
+        if(!inputStr) return;
+        
+        const msgBox = document.getElementById('chat-messages');
+        msgBox.innerHTML += `<div class="chat-msg user">${inputStr.replace(/</g, "&lt;")}</div>`;
+        document.getElementById('chat-input-text').value = "";
+        
+        // Cố gắng đoán entity, ví dụ nếu KH hỏi "iPhone 15 Pro Max"
+        let entity = "";
+        if(inputStr.match(/MacBook|Dell XPS|iPhone 15|Galaxy S24|Pixel 8/i)) {
+            entity = inputStr.match(/MacBook Pro M3|Dell XPS 15|ThinkPad X1|iPhone 15 Pro Max|Galaxy S24 Ultra|Pixel 8 Pro|Nike Running T-Shirt|Adidas Hoodie|Levi's 501 Jeans|Sony WH-1000XM5/i)?.[0] || "";
+        }
+
+        msgBox.innerHTML += `<div class="chat-msg bot loading-msg">Đang suy nghĩ...</div>`;
+        msgBox.scrollTop = msgBox.scrollHeight;
+
+        try {
+            const resp = await fetch('/api/proxy/ai/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: inputStr, product_entity: entity })
+            });
+            const data = await resp.json();
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+            
+            if (data.error) {
+                msgBox.innerHTML += `<div class="chat-msg bot" style="color:red;">Lỗi: ${data.error}</div>`;
+            } else {
+                let formattedResp = data.answer ? data.answer.replace(/\n/g, "<br>") : "Không có phản hồi.";
+                msgBox.innerHTML += `<div class="chat-msg bot">${formattedResp}</div>`;
+            }
+        } catch (e) {
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+            msgBox.innerHTML += `<div class="chat-msg bot" style="color:red;">Lỗi kết nối tới AI Service (Có thể cổng 8007 chưa mở). ${e.message}</div>`;
+        }
+        msgBox.scrollTop = msgBox.scrollHeight;
+    }
+
+    var cartItems = [];
+    
+    // ===== Auth / Navbar =====
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+        const nav = document.getElementById('nav-links');
+
+        if (token) {
+            if (role === 'staff') {
+                nav.innerHTML = `
+                    <span class="nav-user" style="font-size:0.85rem;color:#9898b0;padding:0 6px;">Nhân Viên</span>
+                    <a href="/staff-dashboard/" class="nav-icon-btn profile-btn">👤</a>
+                    <button class="nav-exit-btn" onclick="logout()">Exit</button>`;
+            } else {
+                nav.innerHTML = `
+                    <button class="nav-icon-btn" onclick="openCart()">
+                        🛒<span class="cart-badge" id="cart-badge">0</span>
+                    </button>
+                    <a href="/customer/profile/" class="nav-icon-btn profile-btn" title="Lịch sử mua hàng">📜</a>
+                    <button class="nav-exit-btn" onclick="logout()">Exit</button>`;
+            }
+        } else {
+            nav.innerHTML = `
+                <a href="/login/customer/" class="nav-btn">Khách hàng</a>
+                <a href="/login/staff/" class="nav-btn">Nhân viên</a>`;
+        }
+        
+        // Cập nhật số lượng giỏ hàng ngầm
+        if(token && role === 'customer') {
+            updateCartBadge();
+        }
+    });
+
+    async function updateCartBadge() {
+        const customerId = localStorage.getItem('customerId');
+        if (!customerId) return;
+        try {
+            const resp = await fetch(`/api/proxy/customer/api/cart/${customerId}`);
+            const items = await resp.json();
+            const total = items.reduce((s, i) => s + i.quantity, 0);
+            const badge = document.getElementById('cart-badge');
+            if (badge) badge.innerText = total;
+        } catch(e) {}
+    }
+
+    // Global Search redirect on Enter
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchInput = document.getElementById('global-search');
+        
+        // Handle category tab clicks for seamless experience
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const isHomePage = window.location.pathname === '/' || window.location.pathname === '/customer/';
+                if (isHomePage) {
+                    e.preventDefault();
+                    const url = new URL(tab.href);
+                    const cat = url.searchParams.get('cat');
+                    
+                    // Update URL without reload
+                    window.history.pushState({}, '', tab.href);
+                    
+                    // Trigger filter logic on the page
+                    if (typeof fetchProducts === 'function') {
+                        // Re-run the existing logic in index/homepage templates
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const searchVal = document.getElementById('global-search')?.value || '';
+                        
+                        // Small hack to trigger the filter if the function is available
+                        if (window.location.pathname === '/' && typeof displayData === 'function') {
+                            displayData(allData, cat);
+                        } else if (typeof renderProducts === 'function' && typeof allProductData !== 'undefined') {
+                            renderProducts(allProductData, cat, searchVal);
+                        }
+
+                        // Update active state
+                        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                    } else {
+                         window.location.href = tab.href;
+                    }
+                }
+            });
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const val = e.target.value.trim();
+                    if (window.location.pathname !== '/' && window.location.pathname !== '/customer/') {
+                        window.location.href = `/?search=${encodeURIComponent(val)}`;
+                    }
+                }
+            });
+            // Pre-fill search from URL on index page if applicable
+            const params = new URLSearchParams(window.location.search);
+            const searchVal = params.get('search');
+            if (searchVal) {
+                searchInput.value = searchVal;
+                // Nếu mình đang ở trang index, trigger event input để render
+                if (window.location.pathname === '/' || window.location.pathname === '/customer/') {
+                    setTimeout(() => { searchInput.dispatchEvent(new Event('input')) }, 500);
+                }
+            }
+        }
+    });
+
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        localStorage.removeItem('customerId');
+        window.location.href = '/';
+    }
+    
+    // Cập nhật số lượng giỏ hàng ngầm
+    if(token && role === 'customer') {
+        updateCartBadge();
+    }
+
+    function openCart() {
+        document.getElementById('cart-sidebar').classList.add('open');
+        document.getElementById('cart-overlay').classList.add('open');
+        loadCart();
+    }
+
+    function closeCart() {
+        document.getElementById('cart-sidebar').classList.remove('open');
+        document.getElementById('cart-overlay').classList.remove('open');
+    }
+
+    async function loadCart() {
+        const customerId = localStorage.getItem('customerId');
+        if (!customerId) return;
+
+        const body = document.getElementById('cart-body');
+        body.innerHTML = '<div class="cart-loading"><div class="spinner"></div><span>Đang tải...</span></div>';
+        document.getElementById('cart-footer').style.display = 'none';
+
+        try {
+            // Lấy danh sách sản phẩm để map tên
+            const prodResp = await fetch(`/api/products/?_t=${Date.now()}`);
+            const prodData = await prodResp.json();
+            const productMap = {};
+            if (prodData.laptops) prodData.laptops.forEach(p => productMap[p.id] = p.name);
+            if (prodData.mobiles) prodData.mobiles.forEach(p => productMap[p.id] = p.name);
+
+            const resp = await fetch(`/api/proxy/customer/api/cart/${customerId}`);
+            if (!resp.ok) throw new Error('API error');
+            cartItems = await resp.json();
+            
+            // Ensure cartItems is an array
+            if (!Array.isArray(cartItems)) {
+                console.error('Cart data is not an array:', cartItems);
+                cartItems = [];
+            }
+            
+            // Map names
+            cartItems.forEach(item => {
+                item.productName = item.productName || productMap[item.productId] || (item.productType === 'laptop' ? 'Laptop' : 'Điện thoại');
+            });
+            
+            renderCart(cartItems);
+        } catch (err) {
+            console.error('Load cart error:', err);
+            body.innerHTML = '<div class="cart-empty"><span class="cart-empty-icon">⚠️</span><p>Không thể tải giỏ hàng</p><span>Vui lòng thử lại sau!</span></div>';
+        }
+    }
+
+    function renderCart(items) {
+        const body = document.getElementById('cart-body');
+        const footer = document.getElementById('cart-footer');
+        const summary = document.getElementById('cart-summary');
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            body.innerHTML = `
+                <div class="cart-empty">
+                    <span class="cart-empty-icon">🛒</span>
+                    <p>Giỏ hàng trống</p>
+                    <span>Hãy thêm sản phẩm vào giỏ hàng!</span>
+                </div>`;
+            footer.style.display = 'none';
+            return;
+        }
+
+        const totalItems = items.reduce((s, i) => s + i.quantity, 0);
+        const totalPrice = items.reduce((s, i) => s + Number(i.price) * i.quantity, 0);
+
+        body.innerHTML = items.map(item => `
+            <div class="cart-item" id="cart-item-${item.id}">
+                <div class="cart-item-icon">
+                    ${item.productType === 'laptop' ? '💻' : item.productType === 'mobile' ? '📱' : '👕'}
+                </div>
+                <div class="cart-item-info">
+                    <div class="cart-item-name" title="${item.productName}">${item.productName}</div>
+                    <div class="cart-item-sub">${item.productType === 'laptop' ? '💻 Laptop' : item.productType === 'mobile' ? '📱 Mobile' : '👕 Clothes'}</div>
+                    <div class="cart-item-price">${Number(item.price).toLocaleString('vi-VN')} đ</div>
+                </div>
+                <span class="cart-qty">x${item.quantity}</span>
+                <button class="cart-item-remove" title="Xóa" onclick="removeItem('${item.id}')">🗑️</button>
+            </div>
+        `).join('');
+
+        summary.innerHTML = `
+            <div class="cart-row"><span>Số sản phẩm</span><span>${totalItems} sp</span></div>
+            <div class="cart-row"><span>Tạm tính</span><span>${totalPrice.toLocaleString('vi-VN')} đ</span></div>
+            <div class="cart-row total"><span>Tổng cộng</span><span>${totalPrice.toLocaleString('vi-VN')} đ</span></div>
+        `;
+
+        footer.style.display = 'block';
+    }
+
+    async function removeItem(itemId) {
+        const customerId = localStorage.getItem('customerId');
+        try {
+            await fetch(`/api/proxy/customer/api/cart/${customerId}/${itemId}`, { method: 'DELETE' });
+            document.getElementById(`cart-item-${itemId}`)?.remove();
+            loadCart(); // Refresh
+        } catch (err) {
+            showToast('Lỗi xóa sản phẩm', 'error');
+        }
+    }
+
+    function checkout() {
+        closeCart();
+        window.location.href = '/customer/checkout/';
+    }
+
+    function showToast(msg, type = 'success') {
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3500);
+    }
+    </script>
+</body>
+</html>

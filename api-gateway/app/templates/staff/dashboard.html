@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="hero-banner" style="padding: 3rem 4rem; margin-bottom: 2rem; background: linear-gradient(135deg, #0f0f18 0%, #1a1a35 100%);">
+    <h1 class="hero-title" style="font-size: 2.5rem;">👨‍💼 Quản lý sản phẩm</h1>
+    <p class="hero-subtitle">Thêm mới hoặc cập nhật thông tin sản phẩm laptop và điện thoại.</p>
+</div>
+
+<!-- TABS -->
+<div style="display:flex; gap:1rem; margin-bottom:2rem;">
+    <button id="tab-add" class="tab-btn active-tab" onclick="switchTab('add')">➕ Thêm sản phẩm</button>
+    <button id="tab-update" class="tab-btn" onclick="switchTab('update')">✏️ Cập nhật sản phẩm</button>
+</div>
+
+<!-- ADD FORM -->
+<div id="panel-add" class="login-card" style="max-width:900px; margin:0 auto 3rem;">
+    <h2 style="font-size:1.5rem; font-weight:800; margin-bottom:2rem; color:#fff;">➕ Thêm sản phẩm mới</h2>
+    <form id="add-form">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+            <div class="form-group">
+                <label class="form-label">Loại sản phẩm</label>
+                <select id="add-type" class="form-input">
+                    <option value="laptop">💻 Laptop</option>
+                    <option value="mobile">📱 Điện thoại</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tên sản phẩm</label>
+                <input type="text" id="add-name" class="form-input" placeholder="VD: MacBook Pro 16" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hãng sản xuất</label>
+                <input type="text" id="add-brand" class="form-input" placeholder="VD: Apple" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Giá (VNĐ)</label>
+                <input type="number" id="add-price" class="form-input" placeholder="VD: 50000000" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Số lượng tồn kho</label>
+                <input type="number" id="add-stock" class="form-input" placeholder="VD: 50" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Link ảnh (URL)</label>
+                <input type="text" id="add-imageUrl" class="form-input" placeholder="https://...">
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:1rem;">
+            <label class="form-label">Mô tả sản phẩm</label>
+            <textarea id="add-description" class="form-input" rows="3" placeholder="Mô tả chi tiết..."></textarea>
+        </div>
+        <button type="submit" class="btn-submit" style="margin-top:1rem;">➕ Thêm sản phẩm</button>
+    </form>
+</div>
+
+<!-- UPDATE FORM -->
+<div id="panel-update" class="login-card" style="max-width:900px; margin:0 auto 3rem; display:none;">
+    <h2 style="font-size:1.5rem; font-weight:800; margin-bottom:2rem; color:#fff;">✏️ Cập nhật sản phẩm</h2>
+    <p style="color:#666; font-size:0.9rem; margin-bottom:1.5rem;">Điền ID sản phẩm (lấy từ bảng bên dưới) rồi nhập thông tin muốn cập nhật.</p>
+    <form id="update-form">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+            <div class="form-group">
+                <label class="form-label">Loại sản phẩm</label>
+                <select id="upd-type" class="form-input">
+                    <option value="laptop">💻 Laptop</option>
+                    <option value="mobile">📱 Điện thoại</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="color:#f87171; font-weight:800;">ID sản phẩm (bắt buộc)</label>
+                <input type="text" id="upd-id" class="form-input" placeholder="Dán ID từ bảng bên dưới..." required style="border-color:rgba(248,113,113,0.4);">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tên mới (để trống nếu không đổi)</label>
+                <input type="text" id="upd-name" class="form-input" placeholder="Tên mới...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Giá mới</label>
+                <input type="number" id="upd-price" class="form-input" placeholder="Giá mới...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Số lượng tồn kho mới</label>
+                <input type="number" id="upd-stock" class="form-input" placeholder="Tồn kho mới...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hãng mới</label>
+                <input type="text" id="upd-brand" class="form-input" placeholder="Hãng mới...">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">Link ảnh mới</label>
+                <input type="text" id="upd-imageUrl" class="form-input" placeholder="Link ảnh mới...">
+            </div>
+        </div>
+        <div class="form-group" style="margin-top:1rem;">
+            <label class="form-label">Mô tả mới</label>
+            <textarea id="upd-description" class="form-input" rows="3" placeholder="Mô tả mới..."></textarea>
+        </div>
+        <button type="submit" class="btn-submit" style="margin-top:1rem;">✏️ Cập nhật</button>
+    </form>
+</div>
+
+<!-- PRODUCT TABLES -->
+<div style="margin-top:1rem;">
+    <!-- LAPTOP TABLE -->
+    <h3 style="font-size:1.2rem; font-weight:800; color:#93c5fd; margin-bottom:1rem;">💻 Danh sách Laptop</h3>
+    <div style="background:var(--bg-card); border-radius:14px; padding:1.5rem; border:1px solid var(--border); overflow-x:auto; margin-bottom:2.5rem;">
+        <table id="laptop-table" style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
+            <thead>
+                <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700; white-space:nowrap;">ID</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Tên sản phẩm</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Hãng</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Giá</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Tồn kho</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody id="laptop-tbody">
+                <tr><td colspan="6" style="padding:1rem; text-align:center; color:#666;">Đang tải...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MOBILE TABLE -->
+    <h3 style="font-size:1.2rem; font-weight:800; color:#c4b5fd; margin-bottom:1rem;">📱 Danh sách Điện Thoại</h3>
+    <div style="background:var(--bg-card); border-radius:14px; padding:1.5rem; border:1px solid var(--border); overflow-x:auto;">
+        <table id="mobile-table" style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
+            <thead>
+                <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700; white-space:nowrap;">ID</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Tên sản phẩm</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Hãng</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Giá</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Tồn kho</th>
+                    <th style="padding:0.75rem; color:#64748b; font-weight:700;">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody id="mobile-tbody">
+                <tr><td colspan="6" style="padding:1rem; text-align:center; color:#666;">Đang tải...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+.active-tab {
+    background: rgba(59,130,246,0.15);
+    border-color: rgba(59,130,246,0.4);
+    color: #93c5fd;
+}
+.copy-btn {
+    background: none; border: none; cursor: pointer; font-size: 0.75rem;
+    color: #555; padding: 2px 6px; border-radius: 6px; transition: all 0.2s;
+}
+.copy-btn:hover { color: #93c5fd; background: rgba(59,130,246,0.1); }
+.fill-btn {
+    background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2);
+    color: #c4b5fd; cursor: pointer; font-size: 0.75rem; padding: 3px 8px;
+    border-radius: 6px; white-space:nowrap; transition: all 0.2s;
+}
+.fill-btn:hover { background: rgba(139,92,246,0.2); }
+.delete-btn:hover { background: rgba(239,68,68,0.2) !important; }
+</style>
+
+<script>
+function switchTab(tab) {
+    document.getElementById('panel-add').style.display = tab === 'add' ? 'block' : 'none';
+    document.getElementById('panel-update').style.display = tab === 'update' ? 'block' : 'none';
+    document.getElementById('tab-add').className = 'tab-btn' + (tab === 'add' ? ' active-tab' : '');
+    document.getElementById('tab-update').className = 'tab-btn' + (tab === 'update' ? ' active-tab' : '');
+}
+
+function renderTable(items, tbodyId, type) {
+    const tbody = document.getElementById(tbodyId);
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:1rem; text-align:center; color:#666;">Chưa có sản phẩm.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map((item, index) => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:0.75rem; font-family:monospace; font-size:0.75rem; color:#555; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <span title="${item.id}" style="font-weight:700; font-size:0.9rem; color:#f0f0f5; margin-right:5px;">${index + 1}</span>
+                <button class="copy-btn" title="Copy ID" onclick="navigator.clipboard.writeText('${item.id}'); this.textContent='✓'">📋</button>
+            </td>
+            <td style="padding:0.75rem; font-weight:600; color:#f0f0f5;">${item.name}</td>
+            <td style="padding:0.75rem; color:#9898b0;">${item.brand || '—'}</td>
+            <td style="padding:0.75rem; color:#10b981; font-weight:700;">${Number(item.price).toLocaleString('vi-VN')} đ</td>
+            <td style="padding:0.75rem;">
+                <span style="background:${item.stock > 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${item.stock > 0 ? '#34d399' : '#f87171'}; border:1px solid ${item.stock > 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}; padding:3px 10px; border-radius:999px; font-weight:700; font-size:0.82rem;">
+                    ${item.stock} sp
+                </span>
+            </td>
+            <td style="padding:0.75rem; display:flex; gap:0.5rem; align-items:center;">
+                <button class="fill-btn" onclick="fillUpdate('${item.id}','${type}','${item.name.replace(/'/g,"\\'").replace(/"/g,"&quot;")}',${item.price},${item.stock},'${(item.brand||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${(item.imageUrl||'').replace(/'/g,"\\'").replace(/"/g,"&quot;")}', '${(item.description||'').replace(/'/g,"\\'").replace(/\n/g,"\\n").replace(/\r/g,"").replace(/"/g,"&quot;")}')">✏️ Sửa</button>
+                <button class="delete-btn" onclick="deleteProduct('${item.id}', '${type}')" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #f87171; cursor: pointer; font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; white-space:nowrap; transition: all 0.2s;">🗑️ Xóa</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deleteProduct(id, type) {
+    if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
+    try {
+        const resp = await fetch(`/api/proxy/staff/api/${type}/delete/${id}`, {
+            method: 'DELETE'
+        });
+        if (resp.ok) {
+            alert('✅ Xóa sản phẩm thành công!');
+            fetchProducts();
+        } else if (resp.status === 404) {
+            alert('⚠️ Sản phẩm này đã bị xóa từ trước!');
+            fetchProducts();
+        } else {
+            const d = await resp.json();
+            alert('❌ Lỗi: ' + (d.error || 'Xóa thất bại'));
+        }
+    } catch (err) { alert('Lỗi hệ thống!'); }
+}
+
+function fillUpdate(id, type, name, price, stock, brand, imageUrl, description) {
+    switchTab('update');
+    document.getElementById('upd-id').value = id;
+    document.getElementById('upd-type').value = type;
+    document.getElementById('upd-name').value = name;
+    document.getElementById('upd-price').value = price;
+    document.getElementById('upd-stock').value = stock;
+    document.getElementById('upd-brand').value = brand;
+    document.getElementById('upd-imageUrl').value = imageUrl || '';
+    document.getElementById('upd-description').value = description || '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function fetchProducts() {
+    try {
+        const resp = await fetch(`/api/products/?_t=${new Date().getTime()}`, { cache: 'no-store' });
+        const data = await resp.json();
+        renderTable(data.laptops || [], 'laptop-tbody', 'laptop');
+        renderTable(data.mobiles || [], 'mobile-tbody', 'mobile');
+    } catch (err) { console.error('Fetch error:', err); }
+}
+
+// Add product
+document.getElementById('add-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('add-type').value;
+    const payload = {
+        name: document.getElementById('add-name').value,
+        brand: document.getElementById('add-brand').value,
+        price: Number(document.getElementById('add-price').value),
+        stock: Number(document.getElementById('add-stock').value),
+        imageUrl: document.getElementById('add-imageUrl').value,
+        description: document.getElementById('add-description').value,
+    };
+    try {
+        const resp = await fetch(`/api/proxy/staff/api/${type}/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+            alert('✅ Thêm sản phẩm thành công!');
+            document.getElementById('add-form').reset();
+            fetchProducts();
+        } else {
+            const d = await resp.json();
+            alert('❌ Lỗi: ' + (d.error || 'Thêm thất bại'));
+        }
+    } catch (err) { alert('Lỗi hệ thống!'); }
+};
+
+// Update product
+document.getElementById('update-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('upd-type').value;
+    const id = document.getElementById('upd-id').value.trim();
+    if (!id) { alert('Vui lòng nhập ID sản phẩm!'); return; }
+    
+    const payload = {};
+    const name = document.getElementById('upd-name').value;
+    const price = document.getElementById('upd-price').value;
+    const stock = document.getElementById('upd-stock').value;
+    const brand = document.getElementById('upd-brand').value;
+    const imageUrl = document.getElementById('upd-imageUrl').value;
+    const description = document.getElementById('upd-description').value;
+    
+    if (name) payload.name = name;
+    if (price) payload.price = Number(price);
+    if (stock) payload.stock = Number(stock);
+    if (brand) payload.brand = brand;
+    if (imageUrl) payload.imageUrl = imageUrl;
+    if (description) payload.description = description;
+    
+    try {
+        const resp = await fetch(`/api/proxy/staff/api/${type}/update/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+            alert('✅ Cập nhật thành công!');
+            fetchProducts();
+        } else {
+            const d = await resp.json();
+            alert('❌ Lỗi: ' + (d.error || 'Cập nhật thất bại'));
+        }
+    } catch (err) { alert('Lỗi hệ thống!'); }
+};
+
+fetchProducts();
+</script>
+{% endblock %}

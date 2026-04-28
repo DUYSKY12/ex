@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+
+
+<div id="product-container">
+    <div class="section-header">
+        <h2 class="section-tag">DÀNH CHO BẠN</h2>
+        <span id="product-count-badge" class="count-badge" style="display:none;"></span>
+    </div>
+    <div class="product-grid" id="product-grid">
+        <!-- Products will be injected by JavaScript SAME AS HOMEPAGE -->
+    </div>
+</div>
+
+<script>
+    let allProductData = [];
+
+    // Copy the fetch logic from homepage or put in common JS
+    async function fetchProducts() {
+        try {
+            const resp = await fetch('/api/products/');
+            const data = await resp.json();
+            allProductData = [
+                ...(data.laptops || []).map(p => ({ ...p, type: 'laptop' })),
+                ...(data.mobiles || []).map(p => ({ ...p, type: 'mobile' }))
+            ];
+            
+            // Lấy query param từ form category
+            const urlParams = new URLSearchParams(window.location.search);
+            const cat = urlParams.get('cat');
+            
+            // Xử lý Active của tabs trên header
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            if (cat === 'laptop') {
+                const tl = document.getElementById('tab-laptop');
+                if (tl) tl.classList.add('active');
+            } else if (cat === 'mobile') {
+                const tm = document.getElementById('tab-mobile');
+                if (tm) tm.classList.add('active');
+            }
+
+            // Mặc định render với filter text từ URL nếu có
+            const searchVal = urlParams.get('search') || '';
+            renderProducts(allProductData, cat, searchVal);
+
+            // Gắn event listener cho search bar toàn cục
+            const searchInput = document.getElementById('global-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const text = e.target.value;
+                    renderProducts(allProductData, cat, text);
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching products:', err);
+        }
+    }
+
+    function renderProducts(products, categoryFilter, searchFilter) {
+        const grid = document.getElementById('product-grid');
+        const sectionTitle = document.querySelector('.section-tag');
+        const countBadge = document.getElementById('product-count-badge');
+        if (!grid || !sectionTitle) return;
+
+        grid.innerHTML = '';
+        
+        // Update Title and Badge based on Category
+        if (categoryFilter === 'laptop') {
+            sectionTitle.innerHTML = '💻 LAPTOPS';
+            countBadge.style.display = 'inline-block';
+        } else if (categoryFilter === 'mobile') {
+            sectionTitle.innerHTML = '📱 MOBILES';
+            countBadge.style.display = 'inline-block';
+        } else {
+            sectionTitle.textContent = 'DÀNH CHO BẠN';
+            countBadge.style.display = 'none';
+        }
+
+        let filtered = products;
+        if (categoryFilter) {
+            filtered = filtered.filter(p => p.type === categoryFilter);
+        }
+        
+        if (countBadge.style.display !== 'none') {
+            countBadge.textContent = `( ${filtered.length} sản phẩm )`;
+        }
+        if (searchFilter) {
+            const lowSearch = searchFilter.toLowerCase();
+            filtered = filtered.filter(p => p.name.toLowerCase().includes(lowSearch));
+        }
+
+        if (filtered.length === 0) {
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align:center; color:#888; padding:3rem 0; font-size:1.1rem;">Không tìm thấy sản phẩm nào phù hợp.</p>';
+            return;
+        }
+
+        filtered.forEach(product => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <div class="card-image-wrapper">
+                    <img src="${product.imageUrl || 'https://via.placeholder.com/200'}" alt="${product.name}">
+                </div>
+                <div class="card-body">
+                    <h3 class="card-name">${product.name}</h3>
+                    <p class="card-price">${Number(product.price).toLocaleString('vi-VN')} đ</p>
+                    <button class="btn-add" onclick="addToCart('${product.id}', '${product.type}', '${product.name.replace(/'/g, "\\'")}', ${product.price})">Thêm vào giỏ</button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function addToCart(productId, productType, productName, price) {
+        const customerId = localStorage.getItem('customerId');
+        fetch('/api/proxy/customer/api/cart/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerId, productId, productType, productName, quantity: 1, price })
+        })
+        .then(res => res.json())
+        .then(() => {
+            if (typeof showToast === 'function') {
+                showToast('Đã thêm vào giỏ hàng! 🛒');
+            } else {
+                alert('Đã thêm vào giỏ hàng!');
+            }
+            if (typeof updateCartBadge === 'function') updateCartBadge();
+        })
+        .catch(err => console.error('Error adding to cart:', err));
+    }
+
+    fetchProducts();
+</script>
+{% endblock %}

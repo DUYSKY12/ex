@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <h2 class="section-tag" style="margin-bottom: 2rem;">ĐĂNG KÝ THÀNH VIÊN</h2>
+        <form id="register-form">
+            <div class="form-group">
+                <label class="form-label">Tên đăng nhập (Username)</label>
+                <input type="text" id="username" class="form-input" placeholder="Tên đăng nhập" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Họ và tên</label>
+                <input type="text" id="fullName" class="form-input" placeholder="Nguyễn Văn A" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="email" class="form-input" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Mật khẩu</label>
+                <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn-submit">TẠO TÀI KHOẢN</button>
+        </form>
+        <p style="margin-top: 1.5rem; text-align: center; color: #666;">
+            Đã có tài khoản? <a href="/login/customer/" style="color: #3b82f6; font-weight: 700;">Đăng nhập</a>
+        </p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('register-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const fullName = document.getElementById('fullName').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        try {
+            const resp = await fetch('/api/proxy/customer/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, fullName, email, password })
+            });
+
+            if (resp.ok) {
+                alert('Đăng ký thành công! Hãy đăng nhập.');
+                window.location.href = '/login/customer/';
+            } else {
+                const data = await resp.json();
+                alert(data.error || 'Đăng ký thất bại.');
+            }
+        } catch (err) {
+            console.error('Register error:', err);
+            alert('Lỗi hệ thống. Thử lại sau.');
+        }
+    }
+</script>
+{% endblock %}
