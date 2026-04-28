@@ -546,6 +546,40 @@ Các REST API endpoint của AI Service được thiết kế theo chuẩn RESTf
 
 Tập dữ liệu `data_user500.csv` được sinh ra với 500 người dùng thực hiện 8 loại hành vi khác nhau trên nền tảng e-commerce bán laptop. Tổng số bản ghi: ~8,000 hành vi (trung bình 16 hành vi/user).
 
+#### Cấu trúc dữ liệu
+
+```csv
+user_id,product_id,action,timestamp,device_type
+U0001,LP001,view,2024-01-01 10:30:00,desktop
+U0001,LP001,click,2024-01-01 10:31:15,desktop
+U0001,LP002,search,2024-01-01 10:32:45,desktop
+U0001,LP002,view,2024-01-01 10:33:20,desktop
+U0001,LP002,add_to_cart,2024-01-01 10:34:10,desktop
+U0002,LP005,view,2024-01-01 11:00:00,mobile
+U0002,LP005,click,2024-01-01 11:01:30,mobile
+U0002,LP005,wishlist,2024-01-01 11:02:00,mobile
+U0002,LP005,view,2024-01-01 11:05:45,mobile
+U0002,LP005,add_to_cart,2024-01-01 11:06:15,mobile
+U0003,LP010,view,2024-01-01 14:15:00,desktop
+U0003,LP010,review,2024-01-01 14:16:30,desktop
+U0003,LP010,add_to_cart,2024-01-01 14:17:00,desktop
+U0003,LP010,purchase,2024-01-01 14:20:00,desktop
+U0001,LP003,view,2024-01-02 09:30:00,mobile
+U0001,LP003,click,2024-01-02 09:31:20,mobile
+U0001,LP003,search,2024-01-02 09:32:10,mobile
+U0004,LP015,view,2024-01-02 13:45:00,tablet
+U0004,LP015,share,2024-01-02 13:46:30,tablet
+U0005,LP020,view,2024-01-02 15:00:00,desktop
+```
+
+#### Giải thích cột dữ liệu
+
+- **user_id**: Định danh duy nhất của người dùng (U0001 → U0500).
+- **product_id**: Định danh sản phẩm (laptop) (LP001 → LP050).
+- **action**: Loại hành vi thực hiện (8 loại: view, click, search, share, review, wishlist, add_to_cart, purchase).
+- **timestamp**: Thời gian thực hiện hành vi (định dạng ISO 8601).
+- **device_type**: Loại thiết bị người dùng sử dụng (desktop, mobile, tablet).
+
 ### 3.2.2 Giải thích 8 hành vi (behaviors)
 
 Tám hành vi được thiết kế để phản ánh đầy đủ hành trình mua hàng (Customer Journey) của người dùng theo mô hình phễu AIDA (Attention → Interest → Desire → Action):
