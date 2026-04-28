@@ -1,0 +1,383 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: Xử lý thanh toán, hoàn tiền và thống kê doanh thu
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5005
+    description: Local development
+  - url: http://payment-service:5005
+    description: Docker internal
+
+tags:
+  - name: health
+    description: Health check
+  - name: payments
+    description: Quản lý thanh toán
+
+paths:
+
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /payments:
+    get:
+      tags: [payments]
+      summary: Lấy tất cả giao dịch trong hệ thống (Admin only)
+      security:
+        - InternalHeader: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, success, failed, refunded]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-12-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Danh sách giao dịch
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [payments]
+      summary: Tạo thanh toán cho booking
+      security:
+        - InternalHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Thanh toán thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Booking đã được thanh toán
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payments/my:
+    get:
+      tags: [payments]
+      summary: Lấy lịch sử thanh toán của user hiện tại
+      security:
+        - InternalHeader: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Lịch sử thanh toán
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /payments/stats:
+    get:
+      tags: [payments]
+      summary: Thống kê doanh thu (Admin only)
+      security:
+        - InternalHeader: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2024-12-01"
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+      responses:
+        '200':
+          description: Thống kê doanh thu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /payments/{id}:
+    get:
+      tags: [payments]
+      summary: Lấy chi tiết giao dịch
+      security:
+        - InternalHeader: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Chi tiết giao dịch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /payments/{id}/refund:
+    post:
+      tags: [payments]
+      summary: Hoàn tiền cho giao dịch (internal)
+      description: Được gọi nội bộ bởi Booking Service khi hủy booking
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: Hoàn tiền thành công (status = refunded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Giao dịch không thể hoàn tiền (chưa success hoặc đã refunded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    InternalHeader:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: Forwarded by Gateway after JWT verification
+
+  parameters:
+    PaymentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: "660e8400-e29b-41d4-a716-446655440001"
+
+  schemas:
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        booking_id:
+          type: string
+          format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+        user_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          example: 2000000
+        method:
+          type: string
+          enum: [credit_card, cash, bank_transfer]
+          example: "bank_transfer"
+        status:
+          type: string
+          enum: [pending, success, failed, refunded]
+          example: "success"
+        transaction_id:
+          type: string
+          example: "TXN20241201001"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePaymentRequest:
+      type: object
+      required: [booking_id, method]
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+        method:
+          type: string
+          enum: [credit_card, cash, bank_transfer]
+          example: "bank_transfer"
+
+    RevenueStats:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date
+          example: "2024-12-01"
+        to:
+          type: string
+          format: date
+          example: "2024-12-31"
+        total_revenue:
+          type: number
+          format: float
+          example: 50000000
+        total_transactions:
+          type: integer
+          example: 25
+        total_refunds:
+          type: number
+          format: float
+          example: 4000000
+        net_revenue:
+          type: number
+          format: float
+          example: 46000000
+        by_method:
+          type: object
+          properties:
+            credit_card:
+              type: number
+              example: 20000000
+            cash:
+              type: number
+              example: 10000000
+            bank_transfer:
+              type: number
+              example: 20000000
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa xác thực
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Không có quyền truy cập
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy giao dịch
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

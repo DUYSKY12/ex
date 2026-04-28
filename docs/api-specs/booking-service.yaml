@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: Booking Service API
+  description: Quản lý đặt phòng, hủy phòng và lịch sử booking
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5003
+    description: Local development
+  - url: http://booking-service:5003
+    description: Docker internal
+
+tags:
+  - name: health
+    description: Health check
+  - name: bookings
+    description: Quản lý đặt phòng
+
+paths:
+
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /bookings:
+    get:
+      tags: [bookings]
+      summary: Lấy danh sách booking của user hiện tại
+      security:
+        - InternalHeader: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, cancelled]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Danh sách booking
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Booking'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [bookings]
+      summary: Tạo booking mới
+      security:
+        - InternalHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Tạo booking thành công (status = pending)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Phòng không còn trống trong khoảng ngày này
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bookings/all:
+    get:
+      tags: [bookings]
+      summary: Lấy tất cả booking trong hệ thống (Admin only)
+      security:
+        - InternalHeader: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, cancelled]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-12-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Tất cả booking
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Booking'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /bookings/{id}:
+    get:
+      tags: [bookings]
+      summary: Lấy chi tiết booking
+      security:
+        - InternalHeader: []
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Chi tiết booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /bookings/{id}/confirm:
+    patch:
+      tags: [bookings]
+      summary: Xác nhận booking sau khi thanh toán (internal)
+      description: Được gọi nội bộ bởi Payment Service sau khi thanh toán thành công
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_id]
+              properties:
+                payment_id:
+                  type: string
+                  format: uuid
+                  example: "660e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Booking đã được xác nhận (status = confirmed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Booking không ở trạng thái pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /bookings/{id}/cancel:
+    patch:
+      tags: [bookings]
+      summary: Hủy booking
+      security:
+        - InternalHeader: []
+      parameters:
+        - $ref: '#/components/parameters/BookingId'
+      responses:
+        '200':
+          description: Hủy booking thành công (status = cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: Không thể hủy booking đã cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    InternalHeader:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: Forwarded by Gateway after JWT verification
+
+  parameters:
+    BookingId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: "770e8400-e29b-41d4-a716-446655440002"
+
+  schemas:
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440002"
+        user_id:
+          type: string
+          format: uuid
+        room_id:
+          type: string
+          format: uuid
+        check_in:
+          type: string
+          format: date
+          example: "2024-12-01"
+        check_out:
+          type: string
+          format: date
+          example: "2024-12-05"
+        total_price:
+          type: number
+          format: float
+          example: 2000000
+        payment_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: null
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled]
+          example: "pending"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateBookingRequest:
+      type: object
+      required: [room_id, check_in, check_out]
+      properties:
+        room_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        check_in:
+          type: string
+          format: date
+          example: "2024-12-01"
+        check_out:
+          type: string
+          format: date
+          example: "2024-12-05"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Dữ liệu đầu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa xác thực
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Không có quyền truy cập
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy booking
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
